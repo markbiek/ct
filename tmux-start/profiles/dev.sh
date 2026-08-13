@@ -1,37 +1,17 @@
-# dev profile: 2 windows for development work
-# Window 1: editor (large top pane + 3 utility panes at bottom)
-# Window 2: claude (two 50/50 vertical panes)
+# dev profile: one window, two 50/50 vertical panes
+# Pane 0 (left): the coding agent
+# Pane 1 (right): shell, or the project command for a main checkout
 
 setup_layout() {
   local session="$1"
   local directory="$2"
 
-  # Window 1: claude + utilities (creates the session)
-  tmux new-session -d -s "$session" -n "ccd" -c "$directory"
+  tmux new-session -d -s "$session" -n "main" -c "$directory"
+  tmux split-window -h -p 50 -t "$session:main" -c "$directory"
 
-  # Split into left and right columns (50/50)
-  tmux split-window -h -p 50 -c "$directory"
-
-  # Split left column: claude top, utility bottom
-  tmux select-pane -t 0
-  tmux split-window -v -l 3 -c "$directory"
-
-  # Split right column: claude top, utility bottom
-  tmux select-pane -t 2
-  tmux split-window -v -l 3 -c "$directory"
-
-  # Window 2: editor (single pane)
-  tmux new-window -t "$session" -n "editor" -c "$directory"
-
-  # Return to window 1
-  tmux select-window -t "$session:claude"
-  tmux select-pane -t 0
+  tmux select-window -t "$session:main"
+  tmux select-pane -t "$session:main.0"
 }
 
-# Pane indices (used by project scripts)
-# Window 1: pane 0 = left claude, pane 1 = left utility, pane 2 = right claude, pane 3 = right utility
-# Window 2: pane 0 = editor
-CLAUDE_PANE_LEFT=0
-UTILITY_PANE_LEFT=1
-CLAUDE_PANE_RIGHT=2
-UTILITY_PANE_RIGHT=3
+CLAUDE_PANE=0
+SHELL_PANE=1
