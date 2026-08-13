@@ -5,13 +5,38 @@
 
 set -euo pipefail
 
-CONFIG_DIR="$HOME/.config/tmux-start"
+if (( BASH_VERSINFO[0] < 4 )); then
+  echo "Error: tms requires bash 4.0 or newer (found $BASH_VERSION)." >&2
+  echo "On macOS: brew install bash" >&2
+  exit 1
+fi
+
+CONFIG_DIR="${TMS_CONFIG_DIR:-$HOME/.config/tmux-start}"
+
+attach=1
+run_project=1
+target_dir="."
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --no-attach)  attach=0; shift ;;
+    --no-project) run_project=0; shift ;;
+    -h|--help)
+      echo "Usage: tms [--no-attach] [--no-project] [<directory>]"
+      exit 0
+      ;;
+    -*)
+      echo "Error: unknown flag '$1'" >&2
+      exit 1
+      ;;
+    *)
+      target_dir="$1"; shift ;;
+  esac
+done
 
 # Load configuration
 source "$CONFIG_DIR/config.sh"
 
-# Get target directory (default to current)
-target_dir="${1:-.}"
 target_dir="$(cd "$target_dir" && pwd)"
 
 # Derive session name from directory (last component, sanitized)
@@ -19,8 +44,11 @@ session_name="$(basename "$target_dir" | tr '.' '_')"
 
 # Check if session already exists
 if tmux has-session -t "$session_name" 2>/dev/null; then
-  echo "Attaching to existing session: $session_name"
-  exec tmux attach -t "$session_name"
+  echo "Reusing existing session: $session_name"
+  if [[ "$attach" -eq 1 ]]; then
+    exec tmux attach -t "$session_name"
+  fi
+  exit 0
 fi
 
 # Find matching profile and project
@@ -55,7 +83,7 @@ source "$profile_script"
 setup_layout "$session_name" "$target_dir"
 
 # Load and run project commands if specified
-if [[ -n "$project" ]]; then
+if [[ -n "$project" && "$run_project" -eq 1 ]]; then
   project_script="$CONFIG_DIR/projects/$project.sh"
   if [[ -f "$project_script" ]]; then
     source "$project_script"
@@ -64,4 +92,7 @@ if [[ -n "$project" ]]; then
 fi
 
 echo "Created session: $session_name (profile: $profile${project:+, project: $project})"
-exec tmux attach -t "$session_name"
+
+if [[ "$attach" -eq 1 ]]; then
+  exec tmux attach -t "$session_name"
+fi
