@@ -1,0 +1,4 @@
+tmux-start/config.sh
+tmux-start/projects/*
+!tmux-start/projects/example.sh
+*.bak

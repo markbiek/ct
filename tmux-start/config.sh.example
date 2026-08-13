@@ -1,0 +1,10 @@
+# tmux-start configuration
+# Maps directory prefixes to "profile:project" (project is optional).
+# Copy to config.sh and edit. config.sh is yours; it is never overwritten.
+
+declare -A DIR_MAPPINGS=(
+  ["$HOME/dev/myproject"]="dev:myproject"
+  ["$HOME/notes"]="simple"
+)
+
+DEFAULT_PROFILE="simple"
