@@ -12,13 +12,9 @@ ct_dir="$(cd "$(dirname "$ct_self")" && pwd)"
 # shellcheck source=/dev/null
 source "$ct_dir/ct-lib.sh"
 
-# Generic defaults. Override in ~/.config/ct/config.sh:
+# Override CT_ROOTS in ~/.config/ct/config.sh:
 #   CT_ROOTS=("$HOME/dev" "$HOME/work")
-CT_ROOTS=("$HOME/dev" "$HOME/src" "$HOME/code" "$HOME/projects")
-if [[ -f "$HOME/.config/ct/config.sh" ]]; then
-  # shellcheck source=/dev/null
-  source "$HOME/.config/ct/config.sh"
-fi
+ct_load_config
 
 ct_die() {
   echo "Error: $*" >&2

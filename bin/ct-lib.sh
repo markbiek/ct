@@ -49,6 +49,16 @@ ct_recent_file() {
   printf '%s/recent\n' "${CT_STATE_DIR:-$HOME/.local/state/ct}"
 }
 
+# Load CT_ROOTS: generic defaults, then the user's config file if present.
+# Lives here rather than inline in bin/ct so ct-alfred reads the same values.
+ct_load_config() {
+  CT_ROOTS=("$HOME/dev" "$HOME/src" "$HOME/code" "$HOME/projects")
+  if [[ -f "$HOME/.config/ct/config.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$HOME/.config/ct/config.sh"
+  fi
+}
+
 ct_recent_add() {
   local repo="${1%/}"
   local file tmp
