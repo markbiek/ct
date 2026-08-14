@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if (( BASH_VERSINFO[0] < 4 )); then
+  echo "Error: ct requires bash 4.0 or newer (found $BASH_VERSION)." >&2
+  echo "On macOS: brew install bash" >&2
+  exit 1
+fi
+
+ct_self="$(readlink -f "${BASH_SOURCE[0]}")"
+ct_dir="$(cd "$(dirname "$ct_self")" && pwd)"
+# shellcheck source=/dev/null
+source "$ct_dir/ct-lib.sh"
+
+# Generic defaults. Override in ~/.config/ct/config.sh:
+#   CT_ROOTS=("$HOME/dev" "$HOME/work")
+CT_ROOTS=("$HOME/dev" "$HOME/src" "$HOME/code" "$HOME/projects")
+if [[ -f "$HOME/.config/ct/config.sh" ]]; then
+  # shellcheck source=/dev/null
+  source "$HOME/.config/ct/config.sh"
+fi
+
+ct_die() {
+  echo "Error: $*" >&2
+  exit 1
+}
+
+# Create or reuse the tmux session for a task, and start the agent in pane 0.
+ct_ensure_tmux() {
+  local slug="$1" path="$2" existing
+
+  if tmux has-session -t "$slug" 2>/dev/null; then
+    existing="$(tmux display-message -p -t "$slug" '#{session_path}')"
+    if [[ "$existing" != "$path" ]]; then
+      ct_die "tmux session '$slug' already exists at $existing, not $path"
+    fi
+    echo "Reusing tmux session $slug"
+    return 0
+  fi
+
+  tms --no-attach --no-project "$path"
+  tmux send-keys -t "$slug:main.0" "$(ct_claude_cmd "$path")" C-m
+  echo "Created tmux session $slug"
+}
+
+# Focus the task's cmux workspace, creating it if absent.
+ct_ensure_workspace() {
+  local slug="$1" path="$2" description="$3" focus="$4" ref window
+
+  ref="$(cmux tree --all --json 2>/dev/null \
+    | ct_parse_cmux \
+    | awk -F'\t' -v s="$slug" '$2 == s { print $1; exit }')" || true
+
+  if [[ -n "$ref" ]]; then
+    cmux workspace select "$ref"
+    echo "Selected existing cmux workspace $ref"
+    return 0
+  fi
+
+  # The git and tmux work is already done by this point, so a cmux failure
+  # is reported rather than fatal.
+  if ! window="$(cmux current-window 2>/dev/null)" || [[ -z "$window" ]]; then
+    echo "Warning: cmux is not reachable; worktree and tmux session are ready." >&2
+    echo "Attach by hand with: tmux attach -t $slug" >&2
+    return 0
+  fi
+
+  if ! cmux workspace create \
+    --window "$window" \
+    --cwd "$path" \
+    --name "$slug" \
+    --description "$description" \
+    --command "tmux attach -t $slug" \
+    --focus "$focus"; then
+    echo "Warning: cmux workspace create failed; attach by hand: tmux attach -t $slug" >&2
+    return 0
+  fi
+
+  echo "Created cmux workspace $slug"
+}
+
+ct_cmd_new() {
+  local repo="" name="" focus="true" description=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --repo)     repo="$2"; shift 2 ;;
+      --name)     name="$2"; shift 2 ;;
+      --no-focus) focus="false"; shift ;;
+      *)          ct_die "unknown flag '$1'" ;;
+    esac
+  done
+
+  [[ -n "$repo" ]] || ct_die "--repo is required (interactive picker lands in Task 10)"
+  [[ -n "$name" ]] || ct_die "--name is required (interactive picker lands in Task 10)"
+
+  repo="${repo%/}"
+  [[ -d "$repo/.git" ]] || ct_die "$repo is not a git repository"
+
+  # ct_worktree_root degrades to a CWD-relative path on relative input
+  # (`myrepo` -> `./myrepo-wt`), which would put the worktree inside the repo
+  # once `git -C` resolved it. Normalize before any path derivation.
+  repo="$(cd "$repo" && pwd)"
+
+  local slug path
+  slug="$(ct_slugify "$name")"
+  [[ -n "$slug" ]] || ct_die "'$name' slugified to an empty string"
+  path="$(ct_worktree_path "$repo" "$slug")"
+  description="$name"
+
+  ct_add_worktree "$repo" "$slug"
+  ct_recent_add "$repo"
+  ct_ensure_tmux "$slug" "$path"
+  ct_ensure_workspace "$slug" "$path" "$description" "$focus"
+
+  echo "Task $slug ready at $path"
+}
+
+ct_usage() {
+  cat <<'USAGE'
+Usage:
+  ct new    [--repo <path>] [--name <text>] [--no-focus]
+  ct switch [<slug>]
+  ct finish [<slug>] [--force]
+  ct list   [--json]
+USAGE
+}
+
+main() {
+  local cmd="${1:-}"
+  [[ $# -gt 0 ]] && shift
+
+  case "$cmd" in
+    new)          ct_cmd_new "$@" ;;
+    -h|--help|"") ct_usage ;;
+    *)            ct_die "unknown command '$cmd'" ;;
+  esac
+}
+
+main "$@"
