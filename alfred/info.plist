@@ -112,12 +112,14 @@
 				<true/>
 				<key>alfredfiltersresultsmatchmode</key>
 				<integer>0</integer>
+				<key>argumenttreatemptyqueryasnil</key>
+				<true/>
 				<key>argumenttrimmode</key>
 				<integer>0</integer>
 				<key>argumenttype</key>
 				<integer>1</integer>
 				<key>escaping</key>
-				<integer>0</integer>
+				<integer>102</integer>
 				<key>keyword</key>
 				<string>ct</string>
 				<key>queuedelaycustom</key>
@@ -159,12 +161,14 @@
 				<false/>
 				<key>alfredfiltersresultsmatchmode</key>
 				<integer>0</integer>
+				<key>argumenttreatemptyqueryasnil</key>
+				<true/>
 				<key>argumenttrimmode</key>
 				<integer>0</integer>
 				<key>argumenttype</key>
 				<integer>1</integer>
 				<key>escaping</key>
-				<integer>0</integer>
+				<integer>102</integer>
 				<key>keyword</key>
 				<string>ctn</string>
 				<key>queuedelaycustom</key>
@@ -206,12 +210,14 @@
 				<true/>
 				<key>alfredfiltersresultsmatchmode</key>
 				<integer>0</integer>
+				<key>argumenttreatemptyqueryasnil</key>
+				<true/>
 				<key>argumenttrimmode</key>
 				<integer>0</integer>
 				<key>argumenttype</key>
 				<integer>1</integer>
 				<key>escaping</key>
-				<integer>0</integer>
+				<integer>102</integer>
 				<key>keyword</key>
 				<string>ctl</string>
 				<key>queuedelaycustom</key>
@@ -252,7 +258,7 @@
 				<key>concurrently</key>
 				<false/>
 				<key>escaping</key>
-				<integer>0</integer>
+				<integer>102</integer>
 				<key>script</key>
 				<string>export PATH="$HOME/.local/bin:$PATH"; exec ct-alfred do-switch "$1"</string>
 				<key>scriptargtype</key>
@@ -275,7 +281,7 @@
 				<key>concurrently</key>
 				<false/>
 				<key>escaping</key>
-				<integer>0</integer>
+				<integer>102</integer>
 				<key>script</key>
 				<string>export PATH="$HOME/.local/bin:$PATH"; exec ct-alfred do-finish "$1"</string>
 				<key>scriptargtype</key>
@@ -298,7 +304,7 @@
 				<key>concurrently</key>
 				<false/>
 				<key>escaping</key>
-				<integer>0</integer>
+				<integer>102</integer>
 				<key>script</key>
 				<string>export PATH="$HOME/.local/bin:$PATH"; exec ct-alfred do-new "$1"</string>
 				<key>scriptargtype</key>
@@ -321,7 +327,7 @@
 				<key>concurrently</key>
 				<false/>
 				<key>escaping</key>
-				<integer>0</integer>
+				<integer>102</integer>
 				<key>script</key>
 				<string>osascript -e "tell application \"Alfred 5\" to search \"ctn $1\""</string>
 				<key>scriptargtype</key>

@@ -16,9 +16,10 @@ def script_filter(uid, keyword, subcommand, title, alfred_filters):
         "config": {
             "alfredfiltersresults": alfred_filters,
             "alfredfiltersresultsmatchmode": 0,
+            "argumenttreatemptyqueryasnil": True,
             "argumenttrimmode": 0,
             "argumenttype": 1,          # optional argument
-            "escaping": 0,
+            "escaping": 102,
             "keyword": keyword,
             "queuedelaycustom": 3,
             "queuedelayimmediatelyinitially": True,
@@ -43,7 +44,7 @@ def run_script(uid, subcommand):
         "version": 2,
         "config": {
             "concurrently": False,
-            "escaping": 0,
+            "escaping": 102,
             "script": SHIM.format(subcommand),
             "scriptargtype": 1,
             "scriptfile": "",
@@ -70,7 +71,7 @@ def set_query(uid):
         "version": 2,
         "config": {
             "concurrently": False,
-            "escaping": 0,
+            "escaping": 102,
             "script": (
                 'osascript -e "tell application \\"Alfred 5\\" '
                 'to search \\"ctn $1\\""'
