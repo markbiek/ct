@@ -240,3 +240,19 @@ ct_add_worktree() {
       ;;
   esac
 }
+
+ct_claude_project_dir() {
+  local path="$1" escaped
+  escaped="$(printf '%s' "$path" | tr '/.' '--')"
+  printf '%s/projects/%s\n' "${CT_CLAUDE_HOME:-$HOME/.claude}" "$escaped"
+}
+
+ct_claude_cmd() {
+  local dir
+  dir="$(ct_claude_project_dir "$1")"
+  if [[ -d "$dir" ]] && [[ -n "$(ls -A "$dir" 2>/dev/null)" ]]; then
+    printf 'claude --continue\n'
+  else
+    printf 'claude\n'
+  fi
+}
