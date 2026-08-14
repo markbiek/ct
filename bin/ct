@@ -26,11 +26,24 @@ ct_die() {
 }
 
 # Create or reuse the tmux session for a task, and start the agent in pane 0.
+#
+# Every -t target here is prefixed with `=`, which forces an exact session-name
+# match. A bare target is resolved by tmux as exact, then fnmatch, then PREFIX,
+# so with a live `auth-refactor` and no `auth`, `has-session -t auth` succeeds
+# against the wrong session -- and the send-keys below would type the agent
+# command into another task's pane. `=` applies to the `session:window.pane`
+# form too.
 ct_ensure_tmux() {
   local slug="$1" path="$2" existing
 
-  if tmux has-session -t "$slug" 2>/dev/null; then
-    existing="$(tmux display-message -p -t "$slug" '#{session_path}')"
+  if tmux has-session -t "=$slug" 2>/dev/null; then
+    # The trailing colon is required. `display-message -t` takes a target-PANE,
+    # and a bare `=slug` with no window part resolves to nothing at all --
+    # printing an empty line and exiting 0 rather than failing. `=slug:` means
+    # "the current pane of exactly this session". The emptiness guard below is
+    # there because that failure mode is silent.
+    existing="$(tmux display-message -p -t "=$slug:" '#{session_path}')"
+    [[ -n "$existing" ]] || ct_die "tmux session '$slug' exists but reported no path"
     if [[ "$existing" != "$path" ]]; then
       ct_die "tmux session '$slug' already exists at $existing, not $path"
     fi
@@ -39,7 +52,7 @@ ct_ensure_tmux() {
   fi
 
   tms --no-attach --no-project "$path"
-  tmux send-keys -t "$slug:main.0" "$(ct_claude_cmd "$path")" C-m
+  tmux send-keys -t "=$slug:main.0" "$(ct_claude_cmd "$path")" C-m
   echo "Created tmux session $slug"
 }
 
@@ -58,7 +71,11 @@ ct_ensure_workspace() {
   if [[ -n "$ref" ]]; then
     if ! cmux workspace select "$ref"; then
       echo "Warning: could not select cmux workspace $ref." >&2
-      echo "Attach by hand with: tmux attach -t $slug" >&2
+      # The `=` forces an exact tmux match (see ct_ensure_tmux). It is single
+      # quoted because this line is meant to be pasted into a shell, and a bare
+      # leading `=` is an equals-expansion in zsh -- `tmux attach -t =foo`
+      # fails with "foo not found" before tmux ever runs.
+      echo "Attach by hand with: tmux attach -t '=$slug'" >&2
       return 0
     fi
     echo "Selected existing cmux workspace $ref"
@@ -69,7 +86,7 @@ ct_ensure_workspace() {
   # is reported rather than fatal.
   if ! window="$(cmux current-window 2>/dev/null)" || [[ -z "$window" ]]; then
     echo "Warning: cmux is not reachable; worktree and tmux session are ready." >&2
-    echo "Attach by hand with: tmux attach -t $slug" >&2
+    echo "Attach by hand with: tmux attach -t '=$slug'" >&2
     return 0
   fi
 
@@ -78,9 +95,9 @@ ct_ensure_workspace() {
     --cwd "$path" \
     --name "$slug" \
     --description "$description" \
-    --command "tmux attach -t $slug" \
+    --command "tmux attach -t '=$slug'" \
     --focus "$focus"; then
-    echo "Warning: cmux workspace create failed; attach by hand: tmux attach -t $slug" >&2
+    echo "Warning: cmux workspace create failed; attach by hand: tmux attach -t '=$slug'" >&2
     return 0
   fi
 
@@ -286,8 +303,11 @@ ct_cmd_finish() {
     fi
   fi
 
-  if tmux has-session -t "$slug" 2>/dev/null; then
-    tmux kill-session -t "$slug"
+  # `=` is not optional here. Without it, tmux falls back to a prefix match, so
+  # finishing `auth` after its own session is gone finds and destroys a live
+  # `auth-refactor` -- while printing "Killed tmux session auth".
+  if tmux has-session -t "=$slug" 2>/dev/null; then
+    tmux kill-session -t "=$slug"
     echo "Killed tmux session $slug"
   fi
 

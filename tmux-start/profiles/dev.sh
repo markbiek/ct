@@ -7,10 +7,12 @@ setup_layout() {
   local directory="$2"
 
   tmux new-session -d -s "$session" -n "main" -c "$directory"
-  tmux split-window -h -p 50 -t "$session:main" -c "$directory"
+  # `=` forces an exact session-name match. tmux falls back to a prefix match on
+  # a bare target, so keep every target in this file anchored.
+  tmux split-window -h -p 50 -t "=$session:main" -c "$directory"
 
-  tmux select-window -t "$session:main"
-  tmux select-pane -t "$session:main.0"
+  tmux select-window -t "=$session:main"
+  tmux select-pane -t "=$session:main.0"
 }
 
 CLAUDE_PANE=0

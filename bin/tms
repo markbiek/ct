@@ -42,11 +42,15 @@ target_dir="$(cd "$target_dir" && pwd)"
 # Derive session name from directory (last component, sanitized)
 session_name="$(basename "$target_dir" | tr '.' '_')"
 
-# Check if session already exists
-if tmux has-session -t "$session_name" 2>/dev/null; then
+# Check if session already exists.
+#
+# The `=` forces an exact name match. tmux resolves a bare -t target by exact,
+# then fnmatch, then PREFIX -- so `tms ~/dev/foo` would report "Reusing existing
+# session: foo" and attach you to an unrelated `foobar`.
+if tmux has-session -t "=$session_name" 2>/dev/null; then
   echo "Reusing existing session: $session_name"
   if [[ "$attach" -eq 1 ]]; then
-    exec tmux attach -t "$session_name"
+    exec tmux attach -t "=$session_name"
   fi
   exit 0
 fi
@@ -94,5 +98,5 @@ fi
 echo "Created session: $session_name (profile: $profile${project:+, project: $project})"
 
 if [[ "$attach" -eq 1 ]]; then
-  exec tmux attach -t "$session_name"
+  exec tmux attach -t "=$session_name"
 fi

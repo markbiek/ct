@@ -7,5 +7,7 @@
 
 run_project_commands() {
   local session="$1"
-  tmux send-keys -t "$session:main.$SHELL_PANE" 'echo hello from the project script' C-m
+  # Anchor the session with `=`: a bare -t target falls back to a prefix match,
+  # so an unrelated session whose name starts with yours can receive the keys.
+  tmux send-keys -t "=$session:main.$SHELL_PANE" 'echo hello from the project script' C-m
 }
