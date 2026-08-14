@@ -55,6 +55,42 @@ ct_alfred_error() {
     '{items: [{title: $t, subtitle: $s, valid: false}]}'
 }
 
+ct_alfred_switch_list() {
+  local tasks
+
+  # `|| tasks=""` rather than letting set -e kill us: a ct failure must still
+  # produce a row, or Alfred shows an empty list with no explanation.
+  tasks="$(ct list --json 2>/dev/null)" || tasks=""
+
+  if [[ -z "$tasks" ]]; then
+    ct_alfred_error "ct is not available" "Check that ct runs from a terminal"
+    return 0
+  fi
+
+  printf '%s' "$tasks" | jq -c '
+    if length == 0 then
+      {items: [{
+        title: "No tasks yet",
+        subtitle: "Use the ctn keyword to create one",
+        valid: false
+      }]}
+    else
+      {items: [ .[] | {
+        uid: .slug,
+        title: .slug,
+        subtitle: ((.repo | split("/") | last) + "  ·  " + .branch
+                   + "  ·  " + .live + "      ⏎ switch    ⌘⏎ finish"),
+        arg: .slug,
+        valid: true,
+        mods: {cmd: {
+          arg: .slug,
+          subtitle: ("Finish " + .slug + " — remove the worktree and kill the session")
+        }}
+      }]}
+    end
+  ' 2>/dev/null || ct_alfred_error "ct returned unreadable output" "Run: ct list --json"
+}
+
 case "${1:-}" in
   switch-list) shift; ct_alfred_switch_list "$@" ;;
   new-list)    shift; ct_alfred_new_list "$@" ;;

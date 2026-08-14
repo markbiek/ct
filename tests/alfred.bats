@@ -41,3 +41,38 @@ EOF
   run ct-alfred
   [ "$status" -eq 2 ]
 }
+
+@test "switch-list turns tasks into Alfred rows" {
+  ct_stub ct '[{"slug":"task-a","repo":"/r/myrepo","branch":"br-a","live":"worktree"}]'
+  run ct-alfred switch-list
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e . >/dev/null
+  [ "$(echo "$output" | jq -r '.items[0].title')" = "task-a" ]
+  [ "$(echo "$output" | jq -r '.items[0].arg')" = "task-a" ]
+  [ "$(echo "$output" | jq -r '.items[0].valid')" = "true" ]
+  [ "$(echo "$output" | jq -r '.items[0].subtitle')" != "" ]
+}
+
+@test "switch-list offers finish on the cmd modifier" {
+  ct_stub ct '[{"slug":"task-a","repo":"/r/myrepo","branch":"br-a","live":"worktree"}]'
+  run ct-alfred switch-list
+  [ "$(echo "$output" | jq -r '.items[0].mods.cmd.arg')" = "task-a" ]
+  [ "$(echo "$output" | jq -r '.items[0].mods.cmd.subtitle')" != "" ]
+}
+
+@test "switch-list shows a row rather than an empty list when there are no tasks" {
+  ct_stub ct '[]'
+  run ct-alfred switch-list
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.items | length')" = "1" ]
+  [ "$(echo "$output" | jq -r '.items[0].valid')" = "false" ]
+  [ "$(echo "$output" | jq -r '.items[0].title')" = "No tasks yet" ]
+}
+
+@test "switch-list reports a failing ct as a row, not as broken JSON" {
+  ct_stub ct 'boom' 1
+  run ct-alfred switch-list
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e . >/dev/null
+  [ "$(echo "$output" | jq -r '.items[0].valid')" = "false" ]
+}
