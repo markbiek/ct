@@ -175,6 +175,28 @@ ct_cmd_new() {
   echo "Task $slug ready at $path"
 }
 
+ct_cmd_switch() {
+  local slug="${1:-}" row repo path
+
+  if [[ -z "$slug" ]]; then
+    row="$(ct_tasks | fzf --prompt='task> ' --height=40% --reverse --delimiter='\t')"
+    [[ -n "$row" ]] || ct_die "no task selected"
+    slug="$(printf '%s' "$row" | cut -f1)"
+    repo="$(printf '%s' "$row" | cut -f2)"
+  else
+    row="$(ct_tasks | awk -F'\t' -v s="$slug" '$1 == s { print; exit }')"
+    [[ -n "$row" ]] || ct_die "no task named '$slug'"
+    repo="$(printf '%s' "$row" | cut -f2)"
+  fi
+
+  path="$(ct_worktree_path "$repo" "$slug")"
+  [[ -d "$path" ]] || ct_die "worktree missing at $path"
+
+  ct_recent_add "$repo"
+  ct_ensure_tmux "$slug" "$path"
+  ct_ensure_workspace "$slug" "$path" "$slug" "true"
+}
+
 ct_usage() {
   cat <<'USAGE'
 Usage:
@@ -191,6 +213,7 @@ main() {
 
   case "$cmd" in
     new)          ct_cmd_new "$@" ;;
+    switch)       ct_cmd_switch "$@" ;;
     list)         ct_cmd_list "$@" ;;
     -h|--help|"") ct_usage ;;
     *)            ct_die "unknown command '$cmd'" ;;
