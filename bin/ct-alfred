@@ -36,6 +36,10 @@ if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ] && [ -z "${CT_ALFRED_REEXEC:-}" ]; then
     echo "ct-alfred requires bash 4+. On macOS: brew install bash" >&2
     exit 1
   }
+  # Prepend, not append: `ct` and `tms` use `#!/usr/bin/env bash`, and env takes
+  # the FIRST bash on PATH -- /bin/bash 3.2 under Alfred, which ct refuses.
+  PATH="$(dirname "$ct_alfred_bash"):$PATH"
+  export PATH
   CT_ALFRED_REEXEC=1 exec "$ct_alfred_bash" "$0" "$@"
 fi
 

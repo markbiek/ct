@@ -32,6 +32,29 @@ EOF
   chmod +x "$CT_STUBS/$1"
 }
 
+# A `ct` stub that records the major bash version it was actually invoked
+# under (its own shebang is `env bash`, so this is exactly what a real `ct`
+# would see).
+ct_stub_bash_version_probe() {
+  cat > "$CT_STUBS/ct" <<EOF
+#!/usr/bin/env bash
+printf '%s' "\$BASH_VERSINFO" > "$CT_TMP/ct-bash-major"
+echo '[]'
+EOF
+  chmod +x "$CT_STUBS/ct"
+}
+
+@test "the re-exec prepends a modern bash so ct is found under it, not /bin/bash 3.2" {
+  ct_stub_bash_version_probe
+  # Simulate Alfred's bare environment: only the system PATH plus the stub
+  # dir, and nothing else exported. ct-alfred's shebang is `env bash`, so with
+  # this PATH env resolves it to /bin/bash 3.2 -- exactly what Alfred does.
+  run env -i HOME="$HOME" PATH="/usr/bin:/bin:$CT_STUBS" "$CT_REPO/bin/ct-alfred" switch-list
+  [ "$status" -eq 0 ]
+  [ -f "$CT_TMP/ct-bash-major" ]
+  [ "$(cat "$CT_TMP/ct-bash-major")" -ge 4 ]
+}
+
 @test "an unknown subcommand exits 2" {
   run ct-alfred no-such-thing
   [ "$status" -eq 2 ]
@@ -229,6 +252,26 @@ EOF
   run ct-alfred do-finish task-a
   [ "$status" -eq 0 ]
   [[ "$output" == *"worktree is dirty"* ]]
+}
+
+# Writes to stderr, unlike ct_recording_stub -- this is what a real ct
+# refusal looks like, and is the only way to prove ct_alfred_run merges
+# stderr rather than discarding it.
+ct_stub_stderr() {
+  printf '#!/usr/bin/env bash\necho "%s" >&2\nexit 1\n' "$1" > "$CT_STUBS/ct"
+  chmod +x "$CT_STUBS/ct"
+}
+
+@test "do-finish surfaces a refusal ct wrote to stderr" {
+  ct_stub_stderr "Error: task-a has unsaved work"
+  run ct-alfred do-finish task-a
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"unsaved work"* ]]
+  # Without the 2>&1 merge, ct_alfred_run's local $out stays empty (stderr
+  # bypasses the capture) and it falls back to "finished with no output" --
+  # which bats' own combined stdout/stderr capture would otherwise mask, so
+  # this is the assertion that actually pins the merge.
+  [[ "$output" != *"finished with no output"* ]]
 }
 
 @test "do-new refuses a malformed arg" {
