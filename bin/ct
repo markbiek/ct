@@ -97,7 +97,12 @@ ct_tasks() {
 
   while IFS= read -r repo; do
     git -C "$repo" worktree prune 2>/dev/null || true
-    git -C "$repo" worktree list --porcelain 2>/dev/null | ct_parse_worktrees >> "$wt_tmp"
+    # `|| true` for the same reason as the tmux and cmux lines below: git exits
+    # 128 on anything that is not a real repository, and ct_discover_repos will
+    # happily find a bare directory named `.git`. Without the guard, pipefail
+    # propagates that and one bad directory silently empties the whole listing.
+    git -C "$repo" worktree list --porcelain 2>/dev/null \
+      | ct_parse_worktrees >> "$wt_tmp" || true
   done < <(ct_discover_repos "${CT_ROOTS[@]}")
 
   tmux ls -F '#{session_name}:#{session_path}' 2>/dev/null | ct_parse_tmux > "$tmux_tmp" || true

@@ -277,6 +277,15 @@ ct_join_task_state() {
     repo="${root%-wt}"
     live="worktree"
 
+    # Matching is on slug alone, so two tasks with the same slug in different
+    # repos would each show the other's live markers. That state is already
+    # unreachable through ct: tmux session names are a global namespace and
+    # ct_ensure_tmux refuses a same-named session whose path differs, so the
+    # second `ct new` fails before such a pair can exist. Disambiguating by
+    # path was considered and rejected — git reports canonicalized paths
+    # (/var -> /private/var) while tmux reports the literal one, so a string
+    # compare would introduce the very bug class that has already cost this
+    # project two fix rounds, and cmux's tree JSON carries no path at all.
     if cut -f1 < "$tmux_file" | grep -Fxq -- "$slug"; then
       live="$live/tmux"
     fi
