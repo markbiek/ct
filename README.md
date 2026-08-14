@@ -15,7 +15,9 @@ Built for [cmux](https://cmux.com), tmux, and Claude Code.
 
 ## Install
 
-    git clone https://github.com/<you>/ct ~/dev/ct
+Clone it anywhere — substitute this repository's own clone URL for `REPO_URL`:
+
+    git clone REPO_URL ~/dev/ct
     ~/dev/ct/install.sh
 
 Symlinks `ct`, `ct-linear`, and `tms` into `~/.local/bin`, symlinks the shipped
