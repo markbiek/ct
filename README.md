@@ -35,6 +35,21 @@ one. Your config is never overwritten.
 `ct new` with no flags prompts for a repo (fzf, most-recently-used first) and a
 name (your assigned Linear issues, if configured, or free text).
 
+## Alfred (optional)
+
+`install.sh` also installs an Alfred 5 workflow when Alfred is present.
+
+    ct    switch to a task; cmd-enter finishes it
+    ctn   create a task: pick a repo, type `>`, then type a name
+    ctl   start from an assigned Linear issue
+
+The name you type is normalized to a slug as you type it, and the row shows
+the slug you will get. `ctl` does not create anything; it fills in `ctn`.
+
+The workflow calls `ct-alfred`, which is installed alongside `ct`. Alfred runs
+scripts with a bare PATH and with bash 3.2, so `ct-alfred` extends PATH and
+re-execs itself under a newer bash before it does anything else.
+
 ## Conventions
 
 A task name slugifies to `[a-z0-9-]`. That slug names everything:
