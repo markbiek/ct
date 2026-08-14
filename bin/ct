@@ -148,9 +148,15 @@ ct_cmd_new() {
     esac
   done
 
-  [[ -n "$repo" ]] || repo="$(ct_pick_repo)"
+  # The trailing `|| true` is load-bearing. fzf exits non-zero when cancelled,
+  # and a failing command substitution in an assignment aborts under `set -e`
+  # even on the right-hand side of `||` — bash exempts every command in an
+  # `&&`/`||` list except the one following the final operator. Without it,
+  # cancelling the picker kills ct before it reaches the guard below, so the
+  # user gets a silent exit instead of "no repo selected".
+  [[ -n "$repo" ]] || repo="$(ct_pick_repo)" || true
   [[ -n "$repo" ]] || ct_die "no repo selected"
-  [[ -n "$name" ]] || name="$(ct_pick_name)"
+  [[ -n "$name" ]] || name="$(ct_pick_name)" || true
   [[ -n "$name" ]] || ct_die "no name given"
 
   repo="${repo%/}"
@@ -179,7 +185,10 @@ ct_cmd_switch() {
   local slug="${1:-}" row repo path
 
   if [[ -z "$slug" ]]; then
-    row="$(ct_tasks | fzf --prompt='task> ' --height=40% --reverse --delimiter='\t')"
+    # `|| true` because fzf exits non-zero when cancelled and a failing command
+    # substitution in an assignment aborts under `set -e`, which would kill ct
+    # before it reached the guard below.
+    row="$(ct_tasks | fzf --prompt='task> ' --height=40% --reverse --delimiter='\t')" || true
     [[ -n "$row" ]] || ct_die "no task selected"
     slug="$(printf '%s' "$row" | cut -f1)"
     repo="$(printf '%s' "$row" | cut -f2)"
