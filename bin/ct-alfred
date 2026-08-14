@@ -179,6 +179,17 @@ ct_alfred_linear_list() {
     return 0
   fi
 
+  # ct-linear returns updatedAt order, which interleaves teams. Alfred shows
+  # this list in full before any query is typed, so grouping by team reads
+  # better there than recency does.
+  #
+  # `-t-` splits on the identifier's hyphen: field 1 is the team key, field 2
+  # starts with the issue number. `-k2,2n` must be numeric -- a lexical sort
+  # puts ABC-100 ahead of ABC-9. The title lands in field 3 and beyond and is
+  # never keyed on, so a hyphen inside a title cannot disturb the order.
+  # LC_ALL=C keeps the team ordering stable regardless of the caller's locale.
+  issues="$(LC_ALL=C sort -t- -k1,1 -k2,2n <<< "$issues")"
+
   # The repo half of the prefilled query. The MRU file's first line is the
   # most recent repo; ct_recent_add keeps it in that order.
   prefix=""

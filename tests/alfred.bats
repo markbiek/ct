@@ -224,6 +224,23 @@ EOF
   [ "$(echo "$output" | jq -r '.items[0].valid')" = "false" ]
 }
 
+# ct-linear returns issues in updatedAt order, which scatters teams. Alfred
+# shows the whole list before you type, so grouping beats recency there.
+@test "linear-list groups by team, then orders by issue number" {
+  ct_stub ct-linear "$(printf 'DEF-857\tLater\nABC-9\tNine\nDEF-12\tTwelve\nABC-100\tHundred')"
+  run ct-alfred linear-list
+  [ "$status" -eq 0 ]
+  # ABC-9 before ABC-100 is the part that fails under a plain lexical sort.
+  [ "$(echo "$output" | jq -r '[.items[].title] | join(",")')" = "ABC-9,ABC-100,DEF-12,DEF-857" ]
+}
+
+@test "linear-list keeps each issue's own title after sorting" {
+  ct_stub ct-linear "$(printf 'DEF-857\tLater\nABC-9\tNine')"
+  run ct-alfred linear-list
+  [ "$(echo "$output" | jq -r '.items[0].subtitle')" = "Nine" ]
+  [ "$(echo "$output" | jq -r '.items[1].subtitle')" = "Later" ]
+}
+
 # Records its argv so the test can assert what ct was asked to do.
 ct_recording_stub() {
   cat > "$CT_STUBS/ct" <<EOF
