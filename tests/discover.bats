@@ -15,6 +15,8 @@ setup() {
 }
 
 teardown() {
+  # A test deliberately chmods a directory to 000; restore before removal.
+  chmod -R u+rwx "$CT_TMP" 2>/dev/null || true
   rm -rf "$CT_TMP"
 }
 
@@ -57,4 +59,19 @@ teardown() {
   ct_recent_add "/b"
   run bash -c "printf '/a\n/b\n/c\n' | { source '$CT_REPO/bin/ct-lib.sh'; ct_order_by_recent; }"
   [ "$output" = "$(printf '/b\n/a\n/c')" ]
+}
+
+@test "discover survives an unreadable subdirectory under a root" {
+  mkdir -p "$CT_TMP/roots/locked/sub"
+  chmod 000 "$CT_TMP/roots/locked"
+  run bash -c "set -euo pipefail; source '$CT_REPO/bin/ct-lib.sh'; ct_discover_repos '$CT_TMP/roots'"
+  chmod 755 "$CT_TMP/roots/locked"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$CT_TMP/roots/alpha"* ]]
+}
+
+@test "order_by_recent deduplicates repeated input" {
+  ct_recent_add "/b"
+  run bash -c "printf '/a\n/a\n/b\n/b\n' | { source '$CT_REPO/bin/ct-lib.sh'; ct_order_by_recent; }"
+  [ "$output" = "$(printf '/b\n/a')" ]
 }
