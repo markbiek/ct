@@ -229,7 +229,11 @@ ct_cmd_switch() {
     slug="$(printf '%s' "$row" | cut -f1)"
     repo="$(printf '%s' "$row" | cut -f2)"
   else
-    row="$(ct_tasks | awk -F'\t' -v s="$slug" '$1 == s { print; exit }')"
+    # `|| true` because awk's `exit` closes the pipe: with enough tasks to fill
+    # the 64K pipe buffer, `sort` inside ct_tasks takes SIGPIPE, pipefail
+    # propagates 141, and ct dies silently before the guard below can report a
+    # missing slug.
+    row="$(ct_tasks | awk -F'\t' -v s="$slug" '$1 == s { print; exit }')" || true
     [[ -n "$row" ]] || ct_die "no task named '$slug'"
     repo="$(printf '%s' "$row" | cut -f2)"
   fi
@@ -263,7 +267,8 @@ ct_cmd_finish() {
     slug="$(printf '%s' "$row" | cut -f1)"
     repo="$(printf '%s' "$row" | cut -f2)"
   else
-    row="$(ct_tasks | awk -F'\t' -v s="$slug" '$1 == s { print; exit }')"
+    # `|| true` for the same SIGPIPE reason as in ct_cmd_switch above.
+    row="$(ct_tasks | awk -F'\t' -v s="$slug" '$1 == s { print; exit }')" || true
     [[ -n "$row" ]] || ct_die "no task named '$slug'"
     repo="$(printf '%s' "$row" | cut -f2)"
   fi

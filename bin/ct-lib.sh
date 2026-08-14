@@ -308,19 +308,34 @@ ct_join_task_state() {
 }
 
 # Returns 0 when the worktree is safe to remove, 1 otherwise, printing why.
+#
+# Both git calls are checked for failure and neither swallows stderr. This is
+# the one function whose entire job is preventing lost work, so "git could not
+# answer" must not be indistinguishable from "nothing to report" -- silently
+# reporting clean is exactly the wrong direction to fail in.
 ct_worktree_clean() {
-  local path="$1" dirty=0 unpushed
+  local path="$1" dirty=0 porcelain unpushed
 
-  if [[ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]]; then
+  if ! porcelain="$(git -C "$path" status --porcelain)"; then
+    echo "could not read git status in $path; refusing to call it clean"
+    return 1
+  fi
+  if [[ -n "$porcelain" ]]; then
     echo "uncommitted or untracked changes"
     dirty=1
   fi
 
   # Commits on this worktree's HEAD that no remote-tracking branch contains.
-  unpushed="$(git -C "$path" log --oneline HEAD --not --remotes 2>/dev/null | head -5)"
+  # Captured whole and truncated afterwards with a here-string: piping git into
+  # `head -5` would let head close the pipe on a long list, and under pipefail
+  # the resulting SIGPIPE (141) would read as a git failure.
+  if ! unpushed="$(git -C "$path" log --oneline HEAD --not --remotes)"; then
+    echo "could not list unpushed commits in $path; refusing to call it clean"
+    return 1
+  fi
   if [[ -n "$unpushed" ]]; then
     echo "commits not on origin:"
-    printf '%s\n' "$unpushed"
+    head -5 <<< "$unpushed"
     dirty=1
   fi
 
