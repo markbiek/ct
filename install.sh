@@ -22,7 +22,7 @@ fi
 
 mkdir -p "$bin_dir" "$tmux_start/projects"
 
-for name in ct ct-lib.sh ct-linear tms; do
+for name in ct ct-alfred ct-lib.sh ct-linear tms; do
   if [[ -e "$repo_dir/bin/$name" ]]; then
     ln -sfn "$repo_dir/bin/$name" "$bin_dir/$name"
   fi
@@ -38,6 +38,34 @@ if [[ ! -f "$tmux_start/config.sh" ]]; then
 fi
 if [[ ! -e "$tmux_start/projects/example.sh" ]]; then
   cp "$repo_dir/tmux-start/projects/example.sh" "$tmux_start/projects/example.sh"
+fi
+
+# Alfred workflow. Optional: a machine without Alfred still gets a working ct.
+alfred_workflow_dir() {
+  if [[ -n "${CT_ALFRED_WORKFLOW_DIR:-}" ]]; then
+    printf '%s' "$CT_ALFRED_WORKFLOW_DIR"
+    return 0
+  fi
+  local sync
+  # Alfred keeps its preferences in a sync folder when one is configured, and
+  # the default directory is left empty in that case. Assuming the default
+  # would install a workflow that Alfred never reads.
+  sync="$(defaults read com.runningwithcrayons.Alfred-Preferences syncfolder 2>/dev/null)" || sync=""
+  if [[ -n "$sync" ]]; then
+    printf '%s/Alfred.alfredpreferences/workflows' "${sync/#\~/$HOME}"
+    return 0
+  fi
+  printf '%s' "$HOME/Library/Application Support/Alfred/Alfred.alfredpreferences/workflows"
+}
+
+wf_dir="$(alfred_workflow_dir)"
+if [[ -d "$wf_dir" ]]; then
+  mkdir -p "$wf_dir/ct-alfred"
+  # Copy, not symlink: Alfred does not reliably follow a symlinked workflow.
+  cp "$repo_dir/alfred/info.plist" "$wf_dir/ct-alfred/info.plist"
+  echo "Installed the Alfred workflow to $wf_dir/ct-alfred"
+else
+  echo "Alfred workflow directory not found; skipping the workflow"
 fi
 
 echo "Installed to $bin_dir and $tmux_start"

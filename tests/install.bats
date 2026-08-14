@@ -6,6 +6,11 @@ setup() {
   CT_TESTDIR="$(mktemp -d)"
   export CT_BIN_DIR="$CT_TESTDIR/bin"
   export CT_CONFIG_DIR="$CT_TESTDIR/config"
+  # Default to a scratch path that doesn't exist, so any test that doesn't
+  # care about Alfred exercises the "absent" path instead of falling through
+  # to the real `defaults read` lookup and writing into the user's actual
+  # Alfred workflow directory. Tests that care override this.
+  export CT_ALFRED_WORKFLOW_DIR="$CT_TESTDIR/unused-alfred-workflows"
 }
 
 teardown() {
@@ -69,4 +74,26 @@ teardown() {
   run "$CT_REPO/install.sh"
   [ "$status" -ne 0 ]
   [[ "$output" == *"symlink"* ]]
+}
+
+@test "install.sh symlinks ct-alfred into the bin dir" {
+  run "$CT_REPO/install.sh"
+  [ "$status" -eq 0 ]
+  [ -L "$CT_BIN_DIR/ct-alfred" ]
+  [ "$(readlink -f "$CT_BIN_DIR/ct-alfred")" = "$CT_REPO/bin/ct-alfred" ]
+}
+
+@test "install.sh copies the workflow into the Alfred directory" {
+  export CT_ALFRED_WORKFLOW_DIR="$CT_TESTDIR/workflows"
+  mkdir -p "$CT_ALFRED_WORKFLOW_DIR"
+  run "$CT_REPO/install.sh"
+  [ "$status" -eq 0 ]
+  [ -f "$CT_TESTDIR/workflows/ct-alfred/info.plist" ]
+}
+
+@test "install.sh still succeeds when Alfred is absent" {
+  export CT_ALFRED_WORKFLOW_DIR="$CT_TESTDIR/nope/workflows"
+  run "$CT_REPO/install.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"skipping the workflow"* ]]
 }
