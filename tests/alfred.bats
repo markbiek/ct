@@ -157,3 +157,37 @@ EOF
   run ct-alfred new-list "myrepo > !!!"
   [ "$(echo "$output" | jq -r '.items[0].valid')" = "false" ]
 }
+
+@test "linear-list turns issues into rows that prefill ctn" {
+  ct_stub ct-linear "$(printf 'ABC-857\tUnderstand the thing')"
+  mkdir -p "$CT_STATE_DIR"
+  echo "/r/myrepo" > "$CT_STATE_DIR/recent"
+  run ct-alfred linear-list
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e . >/dev/null
+  [ "$(echo "$output" | jq -r '.items[0].title')" = "ABC-857" ]
+  [ "$(echo "$output" | jq -r '.items[0].subtitle')" = "Understand the thing" ]
+  [ "$(echo "$output" | jq -r '.items[0].arg')" = "myrepo > abc-857-" ]
+}
+
+@test "linear-list omits the repo half when there is no recent repo" {
+  ct_stub ct-linear "$(printf 'ABC-857\tUnderstand the thing')"
+  run ct-alfred linear-list
+  [ "$(echo "$output" | jq -r '.items[0].arg')" = "abc-857-" ]
+}
+
+@test "linear-list explains a missing API key" {
+  ct_stub ct-linear 'Error: no Linear API key found.' 1
+  run ct-alfred linear-list
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e . >/dev/null
+  [ "$(echo "$output" | jq -r '.items[0].valid')" = "false" ]
+  [[ "$(echo "$output" | jq -r '.items[0].subtitle')" == *"security add-generic-password"* ]]
+}
+
+@test "linear-list handles an empty issue list" {
+  ct_stub ct-linear ''
+  run ct-alfred linear-list
+  [ "$(echo "$output" | jq -r '.items | length')" = "1" ]
+  [ "$(echo "$output" | jq -r '.items[0].valid')" = "false" ]
+}

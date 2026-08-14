@@ -161,6 +161,36 @@ ct_alfred_new_list() {
     '{items: [{uid: "create", title: $t, subtitle: $s, arg: $a, valid: true}]}'
 }
 
+ct_alfred_linear_list() {
+  local issues recent_repo prefix ident title
+  local -a rows=()
+
+  issues="$(ct-linear 2>/dev/null)" || issues=""
+
+  if [[ -z "$issues" ]]; then
+    ct_alfred_error "No Linear issues" \
+      "Assign yourself an issue, or add a key: security add-generic-password -s linear-api -a \"\$USER\" -w"
+    return 0
+  fi
+
+  # The repo half of the prefilled query. The MRU file's first line is the
+  # most recent repo; ct_recent_add keeps it in that order.
+  prefix=""
+  recent_repo="$(head -n 1 "$(ct_recent_file)" 2>/dev/null)" || recent_repo=""
+  if [[ -n "$recent_repo" ]]; then
+    prefix="$(ct_repo_name "$recent_repo") > "
+  fi
+
+  while IFS=$'\t' read -r ident title; do
+    [[ -n "$ident" ]] || continue
+    rows+=("$(jq -n --arg i "$ident" --arg t "$title" \
+      --arg a "${prefix}$(ct_slugify "$ident")-" \
+      '{uid: $i, title: $i, subtitle: $t, arg: $a, valid: true}')")
+  done <<< "$issues"
+
+  printf '%s\n' "${rows[@]}" | jq -s -c '{items: .}'
+}
+
 case "${1:-}" in
   switch-list) shift; ct_alfred_switch_list "$@" ;;
   new-list)    shift; ct_alfred_new_list "$@" ;;
