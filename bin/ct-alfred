@@ -55,7 +55,7 @@ ct_load_config
 # path -- Alfred renders nothing at all for malformed output, so a bare error
 # message would look like "no results" and hide the cause.
 ct_alfred_error() {
-  jq -n --arg t "$1" --arg s "$2" \
+  jq -nc --arg t "$1" --arg s "$2" \
     '{items: [{title: $t, subtitle: $s, valid: false}]}'
 }
 
@@ -108,7 +108,7 @@ ct_alfred_repo_rows() {
     fi
     # Built one row at a time through jq so a path with a quote or a backslash
     # cannot break the document.
-    rows+=("$(jq -n --arg n "$name" --arg p "$repo" \
+    rows+=("$(jq -nc --arg n "$name" --arg p "$repo" \
       '{uid: $p, title: $n, subtitle: $p, valid: false,
         autocomplete: ($n + " > ")}')")
   done < <(ct_discover_repos "${CT_ROOTS[@]}" | ct_order_by_recent)
@@ -162,7 +162,7 @@ ct_alfred_new_list() {
     note="$note  ·  normalized from what you typed"
   fi
 
-  jq -n --arg t "Create $slug" --arg s "$note" \
+  jq -nc --arg t "Create $slug" --arg s "$note" \
         --arg a "$(printf '%s\t%s' "$repo_path" "$slug")" \
     '{items: [{uid: "create", title: $t, subtitle: $s, arg: $a, valid: true}]}'
 }
@@ -189,7 +189,7 @@ ct_alfred_linear_list() {
 
   while IFS=$'\t' read -r ident title; do
     [[ -n "$ident" ]] || continue
-    rows+=("$(jq -n --arg i "$ident" --arg t "$title" \
+    rows+=("$(jq -nc --arg i "$ident" --arg t "$title" \
       --arg a "${prefix}$(ct_slugify "$ident")-" \
       '{uid: $i, title: $i, subtitle: $t, arg: $a, valid: true}')")
   done <<< "$issues"
