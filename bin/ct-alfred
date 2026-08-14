@@ -91,6 +91,76 @@ ct_alfred_switch_list() {
   ' 2>/dev/null || ct_alfred_error "ct returned unreadable output" "Run: ct list --json"
 }
 
+# Repo rows, most-recently-used first, filtered by a substring of the basename.
+ct_alfred_repo_rows() {
+  local filter="$1" repo name
+  local -a rows=()
+
+  while IFS= read -r repo; do
+    [[ -n "$repo" ]] || continue
+    name="$(ct_repo_name "$repo")"
+    if [[ -n "$filter" && "$name" != *"$filter"* ]]; then
+      continue
+    fi
+    # Built one row at a time through jq so a path with a quote or a backslash
+    # cannot break the document.
+    rows+=("$(jq -n --arg n "$name" --arg p "$repo" \
+      '{uid: $p, title: $n, subtitle: $p, valid: false,
+        autocomplete: ($n + " > ")}')")
+  done < <(ct_discover_repos "${CT_ROOTS[@]}" | ct_order_by_recent)
+
+  if [[ "${#rows[@]}" -eq 0 ]]; then
+    ct_alfred_error "No repo matches '$filter'" "Check CT_ROOTS in ~/.config/ct/config.sh"
+    return 0
+  fi
+
+  printf '%s\n' "${rows[@]}" | jq -s -c '{items: .}'
+}
+
+ct_alfred_new_list() {
+  local query="${1:-}" repo_part name_part repo_path slug note
+
+  if [[ "$query" != *">"* ]]; then
+    # Leading and trailing whitespace only; the basename never has any.
+    ct_alfred_repo_rows "$(printf '%s' "$query" | sed -E 's/^ +//; s/ +$//')"
+    return 0
+  fi
+
+  repo_part="$(printf '%s' "${query%%>*}" | sed -E 's/^ +//; s/ +$//')"
+  name_part="$(printf '%s' "${query#*>}" | sed -E 's/^ +//; s/ +$//')"
+
+  repo_path=""
+  while IFS= read -r candidate; do
+    [[ -n "$candidate" ]] || continue
+    if [[ "$(ct_repo_name "$candidate")" == "$repo_part" ]]; then
+      repo_path="$candidate"
+      break
+    fi
+  done < <(ct_discover_repos "${CT_ROOTS[@]}")
+
+  if [[ -z "$repo_path" ]]; then
+    ct_alfred_error "No repo named '$repo_part'" "Delete back past the > to pick one"
+    return 0
+  fi
+
+  slug="$(ct_slugify "$name_part")"
+  if [[ -z "$slug" ]]; then
+    ct_alfred_error "Type a task name" "It becomes the branch, worktree, and tmux session"
+    return 0
+  fi
+
+  # Only mention normalization when it actually changed something, so the
+  # subtitle stays quiet on the common path.
+  note="in $repo_part  ·  branch $slug"
+  if [[ "$slug" != "$name_part" ]]; then
+    note="$note  ·  normalized from what you typed"
+  fi
+
+  jq -n --arg t "Create $slug" --arg s "$note" \
+        --arg a "$(printf '%s\t%s' "$repo_path" "$slug")" \
+    '{items: [{uid: "create", title: $t, subtitle: $s, arg: $a, valid: true}]}'
+}
+
 case "${1:-}" in
   switch-list) shift; ct_alfred_switch_list "$@" ;;
   new-list)    shift; ct_alfred_new_list "$@" ;;

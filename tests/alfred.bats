@@ -76,3 +76,84 @@ EOF
   echo "$output" | jq -e . >/dev/null
   [ "$(echo "$output" | jq -r '.items[0].valid')" = "false" ]
 }
+
+# A scratch tree of two repos, wired into CT_ROOTS through a throwaway HOME.
+ct_repos_fixture() {
+  mkdir -p "$CT_TMP/roots/myrepo/.git" "$CT_TMP/roots/other/.git"
+  mkdir -p "$HOME/.config/ct"
+  cat > "$HOME/.config/ct/config.sh" <<EOF
+CT_ROOTS=("$CT_TMP/roots")
+EOF
+}
+
+@test "new-list lists repos before the delimiter" {
+  ct_repos_fixture
+  run ct-alfred new-list ""
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e . >/dev/null
+  [ "$(echo "$output" | jq -r '.items | length')" = "2" ]
+  [ "$(echo "$output" | jq -r '[.items[].title] | sort | join(",")')" = "myrepo,other" ]
+}
+
+@test "new-list repo rows autocomplete the delimiter instead of acting" {
+  ct_repos_fixture
+  run ct-alfred new-list "myrepo"
+  [ "$(echo "$output" | jq -r '.items[0].valid')" = "false" ]
+  [ "$(echo "$output" | jq -r '.items[0].autocomplete')" = "myrepo > " ]
+}
+
+@test "new-list filters repos by the typed text" {
+  ct_repos_fixture
+  run ct-alfred new-list "oth"
+  [ "$(echo "$output" | jq -r '.items | length')" = "1" ]
+  [ "$(echo "$output" | jq -r '.items[0].title')" = "other" ]
+}
+
+@test "new-list says so when no repo matches" {
+  ct_repos_fixture
+  run ct-alfred new-list "zzz"
+  [ "$(echo "$output" | jq -r '.items | length')" = "1" ]
+  [ "$(echo "$output" | jq -r '.items[0].valid')" = "false" ]
+}
+
+@test "new-list normalizes the typed name into a slug" {
+  ct_repos_fixture
+  run ct-alfred new-list "myrepo > ABC-857 Autofix"
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.items[0].valid')" = "true" ]
+  [ "$(echo "$output" | jq -r '.items[0].title')" = "Create abc-857-autofix" ]
+  # printf, not a literal tab: an invisible tab in a test file is a trap.
+  [ "$(echo "$output" | jq -r '.items[0].arg')" \
+    = "$(printf '%s/roots/myrepo\tabc-857-autofix' "$CT_TMP")" ]
+}
+
+@test "new-list flags a name it had to change" {
+  ct_repos_fixture
+  run ct-alfred new-list "myrepo > ABC-857 Autofix"
+  [[ "$(echo "$output" | jq -r '.items[0].subtitle')" == *"normalized"* ]]
+}
+
+@test "new-list leaves an already-valid slug alone and says nothing about it" {
+  ct_repos_fixture
+  run ct-alfred new-list "myrepo > abc-857-autofix"
+  [ "$(echo "$output" | jq -r '.items[0].title')" = "Create abc-857-autofix" ]
+  [[ "$(echo "$output" | jq -r '.items[0].subtitle')" != *"normalized"* ]]
+}
+
+@test "new-list prompts rather than acting on an empty name" {
+  ct_repos_fixture
+  run ct-alfred new-list "myrepo > "
+  [ "$(echo "$output" | jq -r '.items[0].valid')" = "false" ]
+}
+
+@test "new-list rejects a repo that does not exist" {
+  ct_repos_fixture
+  run ct-alfred new-list "nosuch > thing"
+  [ "$(echo "$output" | jq -r '.items[0].valid')" = "false" ]
+}
+
+@test "new-list prompts when the name is punctuation only" {
+  ct_repos_fixture
+  run ct-alfred new-list "myrepo > !!!"
+  [ "$(echo "$output" | jq -r '.items[0].valid')" = "false" ]
+}
