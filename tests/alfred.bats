@@ -156,6 +156,15 @@ EOF
   [[ "$(echo "$output" | jq -r '.items[0].subtitle')" == *"normalized"* ]]
 }
 
+@test "new-list says nothing about normalization for the ctl trailing-hyphen prefill" {
+  ct_repos_fixture
+  # This is exactly what linear-list hands back: an already-slugified
+  # identifier plus a trailing hyphen inviting a suffix.
+  run ct-alfred new-list "myrepo > abc-857-"
+  [ "$(echo "$output" | jq -r '.items[0].title')" = "Create abc-857" ]
+  [[ "$(echo "$output" | jq -r '.items[0].subtitle')" != *"normalized"* ]]
+}
+
 @test "new-list leaves an already-valid slug alone and says nothing about it" {
   ct_repos_fixture
   run ct-alfred new-list "myrepo > abc-857-autofix"

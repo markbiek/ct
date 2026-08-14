@@ -154,9 +154,11 @@ ct_alfred_new_list() {
   fi
 
   # Only mention normalization when it actually changed something, so the
-  # subtitle stays quiet on the common path.
+  # subtitle stays quiet on the common path. linear-list's prefill always adds
+  # a trailing hyphen to invite a suffix, and ct_slugify always strips it --
+  # that alone isn't a normalization the user needs to hear about.
   note="in $repo_part  ·  branch $slug"
-  if [[ "$slug" != "$name_part" ]]; then
+  if [[ "$slug" != "${name_part%-}" ]]; then
     note="$note  ·  normalized from what you typed"
   fi
 
