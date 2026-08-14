@@ -236,7 +236,16 @@ ct_add_worktree() {
     none)
       trunk="$(ct_trunk_ref "$repo")"
       echo "Creating branch $slug off $trunk"
-      git -C "$repo" worktree add -b "$slug" "$path" "$trunk"
+      # --no-track because the start point is a remote-tracking ref, and git's
+      # default branch.autoSetupMerge would make origin/<trunk> the new
+      # branch's upstream. The first `git push` from the worktree then fails
+      # under the default push.default=simple, and the fix git suggests
+      # (`git push origin HEAD:<trunk>`) puts the task's commits on the default
+      # branch. It also makes `git status` read "ahead of origin/<trunk>".
+      # With no upstream, git instead suggests `git push --set-upstream origin
+      # <slug>`, which is what was wanted. The `remote` case above keeps
+      # --track: there the upstream genuinely is the same-named branch.
+      git -C "$repo" worktree add --no-track -b "$slug" "$path" "$trunk"
       ;;
   esac
 }
