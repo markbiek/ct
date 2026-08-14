@@ -213,7 +213,8 @@ ct_cmd_finish() {
     case "$1" in
       --force) force=1; shift ;;
       -*)      ct_die "unknown flag '$1'" ;;
-      *)       slug="$1"; shift ;;
+      *)       [[ -z "$slug" ]] || ct_die "unexpected extra argument '$1'"
+               slug="$1"; shift ;;
     esac
   done
 
@@ -243,9 +244,27 @@ ct_cmd_finish() {
   ws_ref="$(cmux tree --all --json 2>/dev/null \
     | ct_parse_cmux \
     | awk -F'\t' -v s="$slug" '$2 == s { print $1; exit }')" || true
-  # Guarded so a cmux failure cannot abort the teardown midway and strand the
-  # tmux session and worktree. Closing the workspace is the least important of
-  # the three steps; the other two must still run.
+
+  # Remove the worktree FIRST, before touching tmux or cmux. It is the step
+  # most likely to fail legitimately — a dirty tree, or something writing to
+  # the worktree between the check above and here — and failing it after the
+  # teardown would leave the user with no session, no workspace, and the
+  # worktree still on disk. Doing it first means a failure costs nothing that
+  # was not already there, and they can retry.
+  #
+  # --force is forwarded because `git worktree remove` refuses a dirty worktree
+  # on its own, independently of ct_worktree_clean above. Without forwarding it,
+  # `ct finish --force` prints "Removing anyway" and then fails to remove
+  # anything — the exact half-state --force exists to avoid. This only ever
+  # deletes the working directory and its registration, never a branch.
+  if [[ "$force" -eq 1 ]]; then
+    git -C "$repo" worktree remove --force "$path"
+  else
+    git -C "$repo" worktree remove "$path"
+  fi
+  git -C "$repo" worktree prune
+
+  # Guarded so a cmux failure cannot abort what remains of the teardown.
   if [[ -n "$ws_ref" ]]; then
     if cmux workspace close "$ws_ref"; then
       echo "Closed cmux workspace $ws_ref"
@@ -259,8 +278,6 @@ ct_cmd_finish() {
     echo "Killed tmux session $slug"
   fi
 
-  git -C "$repo" worktree remove "$path"
-  git -C "$repo" worktree prune
   echo "Removed worktree $path (branch $slug kept)"
 }
 
