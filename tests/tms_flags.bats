@@ -30,7 +30,7 @@ teardown() {
 @test "--no-attach creates the session and returns without attaching" {
   run env TMS_CONFIG_DIR="$CT_CONF" "$CT_REPO/bin/tms" --no-attach --no-project "$CT_DIR"
   [ "$status" -eq 0 ]
-  run tmux has-session -t "$CT_SESSION"
+  run tmux has-session -t "=$CT_SESSION"
   [ "$status" -eq 0 ]
 }
 
@@ -45,7 +45,7 @@ teardown() {
   env TMS_CONFIG_DIR="$CT_CONF" "$CT_REPO/bin/tms" --no-attach --no-project "$CT_DIR"
   [ ! -f "$CT_TMP/ran" ]
 
-  tmux kill-session -t "$CT_SESSION"
+  tmux kill-session -t "=$CT_SESSION"
   env TMS_CONFIG_DIR="$CT_CONF" "$CT_REPO/bin/tms" --no-attach "$CT_DIR"
   [ -f "$CT_TMP/ran" ]
 }

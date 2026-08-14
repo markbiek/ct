@@ -18,7 +18,7 @@ teardown() {
 @test "dev profile creates one window named main" {
   source "$CT_REPO/tmux-start/profiles/dev.sh"
   setup_layout "$CT_SESSION" "$CT_DIR"
-  run tmux list-windows -t "$CT_SESSION" -F '#{window_name}'
+  run tmux list-windows -t "=$CT_SESSION" -F '#{window_name}'
   [ "$status" -eq 0 ]
   [ "$output" = "main" ]
 }
@@ -26,7 +26,7 @@ teardown() {
 @test "dev profile creates exactly two panes" {
   source "$CT_REPO/tmux-start/profiles/dev.sh"
   setup_layout "$CT_SESSION" "$CT_DIR"
-  run tmux list-panes -t "$CT_SESSION:main" -F '#{pane_index}'
+  run tmux list-panes -t "=$CT_SESSION:main" -F '#{pane_index}'
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" = "2" ]
 }
@@ -35,7 +35,7 @@ teardown() {
   source "$CT_REPO/tmux-start/profiles/dev.sh"
   setup_layout "$CT_SESSION" "$CT_DIR"
   # A vertical split means both panes share the same top edge.
-  run tmux list-panes -t "$CT_SESSION:main" -F '#{pane_top}'
+  run tmux list-panes -t "=$CT_SESSION:main" -F '#{pane_top}'
   [ "$status" -eq 0 ]
   [ "$output" = "$(printf '0\n0')" ]
 }
