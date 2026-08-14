@@ -51,8 +51,16 @@ ct_ensure_workspace() {
     | ct_parse_cmux \
     | awk -F'\t' -v s="$slug" '$2 == s { print $1; exit }')" || true
 
+  # Guarded for the same reason as `workspace create` below: by this point the
+  # worktree and tmux session already exist, so a cmux hiccup should degrade
+  # rather than abort. This is the common path once tasks exist, so leaving it
+  # unguarded would make cmux the single point of failure for `ct new`.
   if [[ -n "$ref" ]]; then
-    cmux workspace select "$ref"
+    if ! cmux workspace select "$ref"; then
+      echo "Warning: could not select cmux workspace $ref." >&2
+      echo "Attach by hand with: tmux attach -t $slug" >&2
+      return 0
+    fi
     echo "Selected existing cmux workspace $ref"
     return 0
   fi
@@ -84,8 +92,8 @@ ct_cmd_new() {
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --repo)     repo="$2"; shift 2 ;;
-      --name)     name="$2"; shift 2 ;;
+      --repo)     [[ $# -ge 2 ]] || ct_die "--repo needs a value"; repo="$2"; shift 2 ;;
+      --name)     [[ $# -ge 2 ]] || ct_die "--name needs a value"; name="$2"; shift 2 ;;
       --no-focus) focus="false"; shift ;;
       *)          ct_die "unknown flag '$1'" ;;
     esac
