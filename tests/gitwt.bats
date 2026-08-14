@@ -52,9 +52,18 @@ teardown() {
 @test "branch_state reports remote for a remote-only branch" {
   git -C "$CT_TMP/seed" branch remote-task
   git -C "$CT_TMP/seed" push -q origin remote-task
-  git -C "$CT_R" fetch -q origin
+  # Deliberately no pre-fetch here: this test must exercise ct_branch_state's
+  # own internal fetch. With a pre-fetch it would pass even if that fetch were
+  # deleted from the function.
   run ct_branch_state "$CT_R" "remote-task"
   [ "$output" = "remote" ]
+}
+
+@test "add_worktree fails loudly on a stray directory rather than reporting success" {
+  mkdir -p "$CT_TMP/roots/myrepo-wt/stray-task"
+  run ct_add_worktree "$CT_R" "stray-task"
+  [ "$status" -ne 0 ]
+  [[ "$output" != *"Worktree already exists"* ]]
 }
 
 @test "add_worktree creates a new branch off trunk" {

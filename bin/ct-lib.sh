@@ -164,6 +164,15 @@ ct_branch_state() {
     return 0
   fi
 
+  # Side effect worth knowing about: this is a network round trip whenever the
+  # branch is not already local. Callers should treat ct_branch_state as a
+  # remote-touching operation, not a cheap local query.
+  #
+  # A failed fetch and a branch that genuinely does not exist on origin both
+  # end up as `none`. That means a network blip can make ct_add_worktree cut a
+  # fresh branch off trunk instead of tracking an existing remote one.
+  # Distinguishing the two needs `git ls-remote` error parsing, which is not
+  # worth the complexity here.
   git -C "$repo" fetch --quiet origin "$slug" 2>/dev/null || true
 
   if git -C "$repo" show-ref --verify --quiet "refs/remotes/origin/$slug"; then
@@ -176,12 +185,40 @@ ct_branch_state() {
 
 ct_add_worktree() {
   local repo="$1" slug="$2"
-  local path state trunk
+  local path state trunk wt registered
   path="$(ct_worktree_path "$repo" "$slug")"
 
-  if [[ -d "$path" ]]; then
+  # Ask git whether this is a registered worktree rather than testing `-d`.
+  # A bare -d would report success for a stray directory left behind by an
+  # interrupted `git worktree add`, handing the caller a broken worktree and
+  # a "ready" message.
+  #
+  # Compared with `-ef` (device+inode), not a string/regex match: git
+  # canonicalizes worktree paths when it registers them (e.g. resolving
+  # /tmp -> /private/tmp on macOS), so a literal match against our own
+  # unresolved $path can miss a real, already-registered worktree.
+  registered=0
+  while IFS= read -r wt; do
+    if [[ "$wt" -ef "$path" ]]; then
+      registered=1
+      break
+    fi
+  done < <(git -C "$repo" worktree list --porcelain | sed -n 's/^worktree //p')
+
+  if [[ "$registered" -eq 1 ]]; then
     echo "Worktree already exists: $path"
     return 0
+  fi
+
+  # An unregistered directory at $path is refused explicitly rather than left
+  # to `git worktree add` below: git only fails loudly against a *non-empty*
+  # stray directory. An empty one (e.g. left by an interrupted `git worktree
+  # add` that got no further than mkdir) is silently accepted as a checkout
+  # target, which would defeat the point of the registration check above.
+  if [[ -e "$path" ]]; then
+    echo "Error: $path exists but is not a registered worktree." >&2
+    echo "Remove it manually and retry." >&2
+    return 1
   fi
 
   mkdir -p "$(dirname "$path")"
