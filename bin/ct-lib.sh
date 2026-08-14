@@ -101,7 +101,11 @@ ct_parse_worktrees() {
   worktree=""
   branch=""
 
-  while IFS= read -r line; do
+  # `|| [[ -n "$line" ]]` processes a final line with no trailing newline.
+  # Without it `read` populates $line but returns non-zero, the loop body never
+  # runs for that line, and the post-loop flush emits a record with an empty
+  # branch — silent corruption rather than an error.
+  while IFS= read -r line || [[ -n "$line" ]]; do
     case "$line" in
       "worktree "*)
         worktree="${line#worktree }" ;;
@@ -127,7 +131,12 @@ ct_parse_worktrees() {
 
 ct_parse_tmux() {
   local line
-  while IFS= read -r line; do
+  # Splits on the FIRST colon. tmux permits colons in session names, so a
+  # hand-created `foo:bar` would mis-pair; ct only ever creates sessions from
+  # `[a-z0-9-]` slugs, and a mis-paired name simply fails to match any slug.
+  # `|| [[ -n "$line" ]]` processes a final line with no trailing newline,
+  # which would otherwise be dropped silently.
+  while IFS= read -r line || [[ -n "$line" ]]; do
     printf '%s\t%s\n' "${line%%:*}" "${line#*:}"
   done
   return 0

@@ -36,6 +36,18 @@ notes:/home/u/notes
 task-a:/home/u/dev/myrepo-wt/task-a
 EOF"
   [ "$(printf '%s\n' "$output" | head -1)" = "$(printf 'notes\t/home/u/notes')" ]
+  [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" = "2" ]
+}
+
+@test "parse_tmux keeps a final line with no trailing newline" {
+  run bash -c "printf 'a:/p1\nb:/p2' | { source '$CT_REPO/bin/ct-lib.sh'; ct_parse_tmux; }"
+  [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" = "2" ]
+  [ "$(printf '%s\n' "$output" | tail -1)" = "$(printf 'b\t/p2')" ]
+}
+
+@test "parse_worktrees keeps a final record with no trailing newline" {
+  run bash -c "printf 'worktree /x\nHEAD abc\nbranch refs/heads/main' | { source '$CT_REPO/bin/ct-lib.sh'; ct_parse_worktrees; }"
+  [ "$output" = "$(printf '/x\tmain')" ]
 }
 
 @test "parse_cmux emits workspace ref and title" {
