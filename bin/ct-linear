@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Prints assigned, not-yet-completed Linear issues as: <identifier>\t<title>
+# The key is resolved lazily so nothing is fetched at shell startup.
+
+resolve_key() {
+  if [[ -n "${LINEAR_API_KEY:-}" ]]; then
+    printf '%s' "$LINEAR_API_KEY"
+    return 0
+  fi
+  if [[ -n "${CT_LINEAR_KEY_CMD:-}" ]]; then
+    eval "$CT_LINEAR_KEY_CMD"
+    return $?
+  fi
+  if command -v security >/dev/null 2>&1; then
+    security find-generic-password -s linear-api -w 2>/dev/null
+    return $?
+  fi
+  return 1
+}
+
+api_key="$(resolve_key)" || {
+  echo "Error: no Linear API key found." >&2
+  echo "Set LINEAR_API_KEY, or CT_LINEAR_KEY_CMD to a command that prints one," >&2
+  echo "or on macOS: security add-generic-password -s linear-api -a \"\$USER\" -w" >&2
+  exit 1
+}
+
+read -r -d '' query <<'GRAPHQL' || true
+query {
+  viewer {
+    assignedIssues(
+      first: 100
+      filter: { state: { type: { nin: ["completed", "canceled"] } } }
+      orderBy: updatedAt
+    ) {
+      nodes { identifier title }
+    }
+  }
+}
+GRAPHQL
+
+curl -fsS https://api.linear.app/graphql \
+  -H "Authorization: $api_key" \
+  -H "Content-Type: application/json" \
+  --data "$(jq -n --arg q "$query" '{query: $q}')" \
+  | jq -r '.data.viewer.assignedIssues.nodes[] | [.identifier, .title] | @tsv'

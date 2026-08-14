@@ -131,7 +131,20 @@ ct_pick_repo() {
 }
 
 ct_pick_name() {
-  local name
+  local issues row name
+
+  # Linear is optional. Any failure falls through to free text.
+  issues="$(ct-linear 2>/dev/null)" || issues=""
+
+  if [[ -n "$issues" ]]; then
+    row="$(printf '%s\n' "$issues" \
+      | fzf --prompt='linear (esc to type a name)> ' --height=40% --reverse --delimiter='\t')" || row=""
+    if [[ -n "$row" ]]; then
+      printf '%s %s\n' "$(printf '%s' "$row" | cut -f1)" "$(printf '%s' "$row" | cut -f2)"
+      return 0
+    fi
+  fi
+
   read -r -p "Task name: " name
   printf '%s\n' "$name"
 }
