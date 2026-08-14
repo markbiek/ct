@@ -191,6 +191,39 @@ ct_alfred_linear_list() {
   printf '%s\n' "${rows[@]}" | jq -s -c '{items: .}'
 }
 
+# Run ct and print whatever it said, merging stderr: ct writes its warnings
+# and refusals there, and those are exactly what the notification should show.
+# Always exit 0 -- a non-zero exit makes Alfred show a generic failure banner
+# instead of the reason ct gave.
+ct_alfred_run() {
+  local out
+  out="$(ct "$@" 2>&1)" || true
+  [[ -n "$out" ]] || out="ct $1 finished with no output"
+  printf '%s\n' "$out"
+  return 0
+}
+
+ct_alfred_do_switch() {
+  ct_alfred_run switch "$1"
+}
+
+ct_alfred_do_finish() {
+  ct_alfred_run finish "$1"
+}
+
+ct_alfred_do_new() {
+  local arg="${1:-}" repo slug
+
+  if [[ "$arg" != *$'\t'* ]]; then
+    echo "Could not read the repo and name from Alfred"
+    return 0
+  fi
+
+  repo="${arg%%$'\t'*}"
+  slug="${arg#*$'\t'}"
+  ct_alfred_run new --repo "$repo" --name "$slug"
+}
+
 case "${1:-}" in
   switch-list) shift; ct_alfred_switch_list "$@" ;;
   new-list)    shift; ct_alfred_new_list "$@" ;;

@@ -191,3 +191,50 @@ EOF
   [ "$(echo "$output" | jq -r '.items | length')" = "1" ]
   [ "$(echo "$output" | jq -r '.items[0].valid')" = "false" ]
 }
+
+# Records its argv so the test can assert what ct was asked to do.
+ct_recording_stub() {
+  cat > "$CT_STUBS/ct" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$CT_TMP/ct.log"
+echo "${1:-ok}"
+exit ${2:-0}
+EOF
+  chmod +x "$CT_STUBS/ct"
+}
+
+@test "do-switch calls ct switch with the slug" {
+  ct_recording_stub
+  run ct-alfred do-switch task-a
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CT_TMP/ct.log")" = "switch task-a" ]
+}
+
+@test "do-finish calls ct finish with the slug" {
+  ct_recording_stub
+  run ct-alfred do-finish task-a
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CT_TMP/ct.log")" = "finish task-a" ]
+}
+
+@test "do-new splits the tab-separated arg into repo and name" {
+  ct_recording_stub
+  run ct-alfred do-new "$(printf '/r/myrepo\tabc-857-autofix')"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CT_TMP/ct.log")" = "new --repo /r/myrepo --name abc-857-autofix" ]
+}
+
+@test "a failing ct still exits 0 and reports its message" {
+  ct_recording_stub "worktree is dirty" 1
+  run ct-alfred do-finish task-a
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"worktree is dirty"* ]]
+}
+
+@test "do-new refuses a malformed arg" {
+  ct_recording_stub
+  run ct-alfred do-new "no-tab-here"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Could not read"* ]]
+  [ ! -f "$CT_TMP/ct.log" ]
+}
