@@ -11,7 +11,12 @@ setup() {
 }
 
 teardown() {
-  tmux kill-server 2>/dev/null || true
+  # Only kill the isolated server; if setup() died before ct_isolate_tmux,
+  # an unguarded kill-server would hit the user's default socket. Matching the
+  # exact path keeps an inherited TMUX_TMPDIR from satisfying the guard.
+  if [[ -n "${CT_TMP:-}" && "${TMUX_TMPDIR:-}" == "$CT_TMP/tmux" ]]; then
+    tmux kill-server 2>/dev/null || true
+  fi
   rm -rf "$CT_TMP"
 }
 

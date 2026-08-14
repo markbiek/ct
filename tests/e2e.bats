@@ -11,6 +11,10 @@ setup() {
   CT_TMP="$(mktemp -d)"
   ct_isolate_tmux "$CT_TMP"
 
+  # Keep every git call in this file away from the real global config: a
+  # core.hooksPath there would run the user's hooks against fixture commits.
+  export GIT_CONFIG_GLOBAL=/dev/null
+
   # Stubs ahead of everything on PATH. cmux logs what it was asked to do and
   # succeeds, so ct_ensure_workspace takes its real path without creating a
   # workspace; claude keeps `ct_ensure_tmux`'s send-keys from starting a real
@@ -83,8 +87,12 @@ EOF
 
 teardown() {
   # Safe only because setup() pointed TMUX_TMPDIR at $CT_TMP: this kills the
-  # per-test server, never the user's. Do not call this without that isolation.
-  tmux kill-server 2>/dev/null || true
+  # per-test server, never the user's. Matching against $CT_TMP rather than
+  # just testing for non-empty means an inherited TMUX_TMPDIR cannot stand in
+  # for the isolation a setup() that died before ct_isolate_tmux never set up.
+  if [[ -n "${CT_TMP:-}" && "${TMUX_TMPDIR:-}" == "$CT_TMP/tmux" ]]; then
+    tmux kill-server 2>/dev/null || true
+  fi
   rm -rf "$CT_TMP"
 }
 
