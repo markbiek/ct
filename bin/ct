@@ -87,6 +87,50 @@ ct_ensure_workspace() {
   echo "Created cmux workspace $slug"
 }
 
+# Gather every task across every discovered repo.
+ct_tasks() {
+  local repo wt_tmp tmux_tmp cmux_tmp
+  wt_tmp="$(mktemp)"
+  tmux_tmp="$(mktemp)"
+  cmux_tmp="$(mktemp)"
+  trap 'rm -f "$wt_tmp" "$tmux_tmp" "$cmux_tmp"' RETURN
+
+  while IFS= read -r repo; do
+    git -C "$repo" worktree prune 2>/dev/null || true
+    git -C "$repo" worktree list --porcelain 2>/dev/null | ct_parse_worktrees >> "$wt_tmp"
+  done < <(ct_discover_repos "${CT_ROOTS[@]}")
+
+  tmux ls -F '#{session_name}:#{session_path}' 2>/dev/null | ct_parse_tmux > "$tmux_tmp" || true
+  cmux tree --all --json 2>/dev/null | ct_parse_cmux > "$cmux_tmp" || true
+
+  ct_join_task_state "$wt_tmp" "$tmux_tmp" "$cmux_tmp" | sort
+}
+
+ct_cmd_list() {
+  if [[ "${1:-}" == "--json" ]]; then
+    ct_tasks | jq -R -s -c 'split("\n") | map(select(length > 0) | split("\t")
+      | {slug: .[0], repo: .[1], branch: .[2], live: .[3]})'
+    return 0
+  fi
+
+  printf '%-40s %-24s %-34s %s\n' SLUG REPO BRANCH LIVE
+  ct_tasks | while IFS=$'\t' read -r slug repo branch live; do
+    printf '%-40s %-24s %-34s %s\n' "$slug" "$(basename "$repo")" "$branch" "$live"
+  done
+}
+
+ct_pick_repo() {
+  ct_discover_repos "${CT_ROOTS[@]}" \
+    | ct_order_by_recent \
+    | fzf --prompt='repo> ' --height=40% --reverse
+}
+
+ct_pick_name() {
+  local name
+  read -r -p "Task name: " name
+  printf '%s\n' "$name"
+}
+
 ct_cmd_new() {
   local repo="" name="" focus="true" description=""
 
@@ -99,8 +143,10 @@ ct_cmd_new() {
     esac
   done
 
-  [[ -n "$repo" ]] || ct_die "--repo is required (interactive picker lands in Task 10)"
-  [[ -n "$name" ]] || ct_die "--name is required (interactive picker lands in Task 10)"
+  [[ -n "$repo" ]] || repo="$(ct_pick_repo)"
+  [[ -n "$repo" ]] || ct_die "no repo selected"
+  [[ -n "$name" ]] || name="$(ct_pick_name)"
+  [[ -n "$name" ]] || ct_die "no name given"
 
   repo="${repo%/}"
   [[ -d "$repo/.git" ]] || ct_die "$repo is not a git repository"
@@ -140,6 +186,7 @@ main() {
 
   case "$cmd" in
     new)          ct_cmd_new "$@" ;;
+    list)         ct_cmd_list "$@" ;;
     -h|--help|"") ct_usage ;;
     *)            ct_die "unknown command '$cmd'" ;;
   esac

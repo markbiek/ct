@@ -256,3 +256,35 @@ ct_claude_cmd() {
     printf 'claude\n'
   fi
 }
+
+# Join worktree, tmux, and cmux state into one task row per worktree.
+# Each argument is a file (or process substitution) holding that tool's
+# already-parsed output.
+ct_join_task_state() {
+  local wt_file="$1" tmux_file="$2" cmux_file="$3"
+  local path branch root slug repo live
+
+  while IFS=$'\t' read -r path branch; do
+    [[ -n "$path" ]] || continue
+
+    root="$(dirname "$path")"
+    case "$root" in
+      *-wt) ;;
+      *) continue ;;
+    esac
+
+    slug="$(basename "$path")"
+    repo="${root%-wt}"
+    live="worktree"
+
+    if cut -f1 < "$tmux_file" | grep -Fxq -- "$slug"; then
+      live="$live/tmux"
+    fi
+    if cut -f2 < "$cmux_file" | grep -Fxq -- "$slug"; then
+      live="$live/cmux"
+    fi
+
+    printf '%s\t%s\t%s\t%s\n' "$slug" "$repo" "$branch" "$live"
+  done < "$wt_file"
+  return 0
+}
