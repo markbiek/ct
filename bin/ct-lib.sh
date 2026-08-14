@@ -95,3 +95,44 @@ ct_order_by_recent() {
   done
   return 0
 }
+
+ct_parse_worktrees() {
+  local line worktree branch
+  worktree=""
+  branch=""
+
+  while IFS= read -r line; do
+    case "$line" in
+      "worktree "*)
+        worktree="${line#worktree }" ;;
+      "branch refs/heads/"*)
+        branch="${line#branch refs/heads/}" ;;
+      "detached")
+        branch="(detached)" ;;
+      "")
+        if [[ -n "$worktree" ]]; then
+          printf '%s\t%s\n' "$worktree" "$branch"
+        fi
+        worktree=""
+        branch=""
+        ;;
+    esac
+  done
+
+  if [[ -n "$worktree" ]]; then
+    printf '%s\t%s\n' "$worktree" "$branch"
+  fi
+  return 0
+}
+
+ct_parse_tmux() {
+  local line
+  while IFS= read -r line; do
+    printf '%s\t%s\n' "${line%%:*}" "${line#*:}"
+  done
+  return 0
+}
+
+ct_parse_cmux() {
+  jq -r '.windows[]? | .workspaces[]? | [.ref, .title] | @tsv'
+}
