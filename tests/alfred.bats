@@ -274,6 +274,22 @@ ct_stub_stderr() {
   [[ "$output" != *"finished with no output"* ]]
 }
 
+@test "do-switch refuses a missing slug rather than crashing" {
+  ct_recording_stub
+  run ct-alfred do-switch
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"No task slug"* ]]
+  [ ! -f "$CT_TMP/ct.log" ]
+}
+
+@test "do-finish refuses a missing slug rather than crashing" {
+  ct_recording_stub
+  run ct-alfred do-finish
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"No task slug"* ]]
+  [ ! -f "$CT_TMP/ct.log" ]
+}
+
 @test "do-new refuses a malformed arg" {
   ct_recording_stub
   run ct-alfred do-new "no-tab-here"

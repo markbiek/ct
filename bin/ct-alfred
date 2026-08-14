@@ -208,11 +208,15 @@ ct_alfred_run() {
 }
 
 ct_alfred_do_switch() {
-  ct_alfred_run switch "$1"
+  local slug="${1:-}"
+  [[ -n "$slug" ]] || { echo "No task slug came through from Alfred"; return 0; }
+  ct_alfred_run switch "$slug"
 }
 
 ct_alfred_do_finish() {
-  ct_alfred_run finish "$1"
+  local slug="${1:-}"
+  [[ -n "$slug" ]] || { echo "No task slug came through from Alfred"; return 0; }
+  ct_alfred_run finish "$slug"
 }
 
 ct_alfred_do_new() {
