@@ -145,3 +145,61 @@ ct_parse_tmux() {
 ct_parse_cmux() {
   jq -r '.windows[]? | .workspaces[]? | [.ref, .title] | @tsv'
 }
+
+ct_trunk_ref() {
+  local repo="$1" head
+  head="$(git -C "$repo" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null)" || {
+    echo "Error: origin/HEAD is not set in $repo." >&2
+    echo "Fix with: git -C $repo remote set-head origin -a" >&2
+    return 1
+  }
+  printf 'origin/%s\n' "${head#refs/remotes/origin/}"
+}
+
+ct_branch_state() {
+  local repo="$1" slug="$2"
+
+  if git -C "$repo" show-ref --verify --quiet "refs/heads/$slug"; then
+    printf 'local\n'
+    return 0
+  fi
+
+  git -C "$repo" fetch --quiet origin "$slug" 2>/dev/null || true
+
+  if git -C "$repo" show-ref --verify --quiet "refs/remotes/origin/$slug"; then
+    printf 'remote\n'
+    return 0
+  fi
+
+  printf 'none\n'
+}
+
+ct_add_worktree() {
+  local repo="$1" slug="$2"
+  local path state trunk
+  path="$(ct_worktree_path "$repo" "$slug")"
+
+  if [[ -d "$path" ]]; then
+    echo "Worktree already exists: $path"
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$path")"
+  state="$(ct_branch_state "$repo" "$slug")"
+
+  case "$state" in
+    local)
+      echo "Reusing local branch $slug"
+      git -C "$repo" worktree add "$path" "$slug"
+      ;;
+    remote)
+      echo "Tracking origin/$slug"
+      git -C "$repo" worktree add --track -b "$slug" "$path" "origin/$slug"
+      ;;
+    none)
+      trunk="$(ct_trunk_ref "$repo")"
+      echo "Creating branch $slug off $trunk"
+      git -C "$repo" worktree add -b "$slug" "$path" "$trunk"
+      ;;
+  esac
+}
