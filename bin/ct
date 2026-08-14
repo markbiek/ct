@@ -44,7 +44,13 @@ ct_ensure_tmux() {
     # there because that failure mode is silent.
     existing="$(tmux display-message -p -t "=$slug:" '#{session_path}')"
     [[ -n "$existing" ]] || ct_die "tmux session '$slug' exists but reported no path"
-    if [[ "$existing" != "$path" ]]; then
+    # Compared with -ef (device+inode) rather than a string match, for the same
+    # reason ct_add_worktree does it: git canonicalizes worktree paths when it
+    # registers them (/var -> /private/var on macOS) while tmux stores whatever
+    # it was handed, so `ct switch` -- which re-derives the path from
+    # `git worktree list` -- would otherwise report a mismatch between two
+    # spellings of one directory.
+    if ! [[ "$existing" -ef "$path" ]]; then
       ct_die "tmux session '$slug' already exists at $existing, not $path"
     fi
     echo "Reusing tmux session $slug"
