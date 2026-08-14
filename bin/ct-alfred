@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+#
+# ct-alfred - Alfred Script Filter adapter for ct.
+#
+# Alfred runs workflow scripts with a bare PATH and with /bin/bash, which is
+# 3.2 on macOS. Everything above the re-exec below must therefore be free of
+# bash 4 syntax. ct-lib.sh uses mapfile and `local -A`, so it cannot be
+# sourced until after the re-exec.
+
+# Alfred's PATH carries none of these. Append rather than prepend: the bats
+# suite puts stub binaries at the front of PATH, and prepending here would
+# silently defeat them and run the tests against the live system.
+PATH="$PATH:$HOME/.local/bin:$HOME/bin:/opt/homebrew/bin:/usr/local/bin"
+PATH="$PATH:/Applications/cmux.app/Contents/Resources/bin"
+export PATH
+
+# bash is the exception to the append rule: /bin/bash is 3.2 and would always
+# win, so look for a modern one by explicit path.
+ct_alfred_find_bash() {
+  local candidate
+  for candidate in /opt/homebrew/bin/bash /usr/local/bin/bash "$(command -v bash)"; do
+    [ -n "$candidate" ] || continue
+    [ -x "$candidate" ] || continue
+    if "$candidate" -c '[ "${BASH_VERSINFO[0]}" -ge 4 ]' 2>/dev/null; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ] && [ -z "${CT_ALFRED_REEXEC:-}" ]; then
+  ct_alfred_bash="$(ct_alfred_find_bash)" || {
+    # No JSON here: without bash 4 nothing below can run, and Alfred shows an
+    # empty list either way. stderr reaches Alfred's debug console.
+    echo "ct-alfred requires bash 4+. On macOS: brew install bash" >&2
+    exit 1
+  }
+  CT_ALFRED_REEXEC=1 exec "$ct_alfred_bash" "$0" "$@"
+fi
+
+set -euo pipefail
+
+ct_alfred_self="$(readlink -f "${BASH_SOURCE[0]}")"
+ct_alfred_dir="$(cd "$(dirname "$ct_alfred_self")" && pwd)"
+# shellcheck source=/dev/null
+source "$ct_alfred_dir/ct-lib.sh"
+ct_load_config
+
+# One non-actionable row. Every list subcommand must print valid JSON on every
+# path -- Alfred renders nothing at all for malformed output, so a bare error
+# message would look like "no results" and hide the cause.
+ct_alfred_error() {
+  jq -n --arg t "$1" --arg s "$2" \
+    '{items: [{title: $t, subtitle: $s, valid: false}]}'
+}
+
+case "${1:-}" in
+  switch-list) shift; ct_alfred_switch_list "$@" ;;
+  new-list)    shift; ct_alfred_new_list "$@" ;;
+  linear-list) shift; ct_alfred_linear_list "$@" ;;
+  do-switch)   shift; ct_alfred_do_switch "$@" ;;
+  do-finish)   shift; ct_alfred_do_finish "$@" ;;
+  do-new)      shift; ct_alfred_do_new "$@" ;;
+  *)
+    echo "Usage: ct-alfred {switch-list|new-list|linear-list|do-switch|do-finish|do-new}" >&2
+    exit 2
+    ;;
+esac
