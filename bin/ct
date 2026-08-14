@@ -206,6 +206,64 @@ ct_cmd_switch() {
   ct_ensure_workspace "$slug" "$path" "$slug" "true"
 }
 
+ct_cmd_finish() {
+  local slug="" force=0 row repo path ws_ref
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --force) force=1; shift ;;
+      -*)      ct_die "unknown flag '$1'" ;;
+      *)       slug="$1"; shift ;;
+    esac
+  done
+
+  if [[ -z "$slug" ]]; then
+    # `|| true` because fzf exits non-zero when cancelled and a failing command
+    # substitution in an assignment aborts under `set -e`, which would kill ct
+    # before it reached the guard below.
+    row="$(ct_tasks | fzf --prompt='finish> ' --height=40% --reverse --delimiter='\t')" || true
+    [[ -n "$row" ]] || ct_die "no task selected"
+    slug="$(printf '%s' "$row" | cut -f1)"
+    repo="$(printf '%s' "$row" | cut -f2)"
+  else
+    row="$(ct_tasks | awk -F'\t' -v s="$slug" '$1 == s { print; exit }')"
+    [[ -n "$row" ]] || ct_die "no task named '$slug'"
+    repo="$(printf '%s' "$row" | cut -f2)"
+  fi
+
+  path="$(ct_worktree_path "$repo" "$slug")"
+
+  if ! ct_worktree_clean "$path"; then
+    if [[ "$force" -eq 0 ]]; then
+      ct_die "$slug has unsaved work (rerun with --force to remove anyway)"
+    fi
+    echo "Removing anyway (--force)"
+  fi
+
+  ws_ref="$(cmux tree --all --json 2>/dev/null \
+    | ct_parse_cmux \
+    | awk -F'\t' -v s="$slug" '$2 == s { print $1; exit }')" || true
+  # Guarded so a cmux failure cannot abort the teardown midway and strand the
+  # tmux session and worktree. Closing the workspace is the least important of
+  # the three steps; the other two must still run.
+  if [[ -n "$ws_ref" ]]; then
+    if cmux workspace close "$ws_ref"; then
+      echo "Closed cmux workspace $ws_ref"
+    else
+      echo "Warning: could not close cmux workspace $ws_ref; continuing." >&2
+    fi
+  fi
+
+  if tmux has-session -t "$slug" 2>/dev/null; then
+    tmux kill-session -t "$slug"
+    echo "Killed tmux session $slug"
+  fi
+
+  git -C "$repo" worktree remove "$path"
+  git -C "$repo" worktree prune
+  echo "Removed worktree $path (branch $slug kept)"
+}
+
 ct_usage() {
   cat <<'USAGE'
 Usage:
@@ -223,6 +281,7 @@ main() {
   case "$cmd" in
     new)          ct_cmd_new "$@" ;;
     switch)       ct_cmd_switch "$@" ;;
+    finish)       ct_cmd_finish "$@" ;;
     list)         ct_cmd_list "$@" ;;
     -h|--help|"") ct_usage ;;
     *)            ct_die "unknown command '$cmd'" ;;

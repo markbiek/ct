@@ -297,3 +297,23 @@ ct_join_task_state() {
   done < "$wt_file"
   return 0
 }
+
+# Returns 0 when the worktree is safe to remove, 1 otherwise, printing why.
+ct_worktree_clean() {
+  local path="$1" dirty=0 unpushed
+
+  if [[ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]]; then
+    echo "uncommitted or untracked changes"
+    dirty=1
+  fi
+
+  # Commits on this worktree's HEAD that no remote-tracking branch contains.
+  unpushed="$(git -C "$path" log --oneline HEAD --not --remotes 2>/dev/null | head -5)"
+  if [[ -n "$unpushed" ]]; then
+    echo "commits not on origin:"
+    printf '%s\n' "$unpushed"
+    dirty=1
+  fi
+
+  return "$dirty"
+}
