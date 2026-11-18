@@ -24,6 +24,13 @@ teardown() {
   [ "$(readlink -f "$CT_BIN_DIR/tms")" = "$CT_REPO/bin/tms" ]
 }
 
+@test "install.sh symlinks hms into the bin dir" {
+  run "$CT_REPO/install.sh"
+  [ "$status" -eq 0 ]
+  [ -L "$CT_BIN_DIR/hms" ]
+  [ "$(readlink -f "$CT_BIN_DIR/hms")" = "$CT_REPO/bin/hms" ]
+}
+
 @test "install.sh symlinks the profiles directory" {
   run "$CT_REPO/install.sh"
   [ "$status" -eq 0 ]

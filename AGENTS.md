@@ -27,6 +27,7 @@ maintainer knows it.
 | `bin/ct-alfred` | Alfred adapter. Emits Script Filter JSON, shells out to `ct`. |
 | `bin/ct-linear` | Prints assigned issues as `<identifier>\t<title>`. Optional. |
 | `bin/tms` | tmux session starter, absorbed from a retired repo. |
+| `bin/hms` | Herdr counterpart of `tms`: same profiles and project scripts, opens a Herdr space. `--wt` adds a worktree first. |
 | `alfred/build-plist.py` | **Generates** `alfred/info.plist`. |
 | `tmux-start/profiles/` | Shipped pane layouts. |
 | `tests/` | bats. `bats tests` runs all of them. |

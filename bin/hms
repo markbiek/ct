@@ -1,0 +1,174 @@
+#!/usr/bin/env bash
+#
+# hms - Herdr space starter, the Herdr counterpart of tms.
+# Opens (or reuses) a Herdr space for a directory: Claude on the left and,
+# for the dev profile, a shell on the right that runs the project command.
+# With --wt it first creates a git worktree at <repo>-wt/<name> from a fresh
+# origin/trunk.
+
+set -euo pipefail
+
+if (( BASH_VERSINFO[0] < 4 )); then
+  echo "Error: hms requires bash 4.0 or newer (found $BASH_VERSION)." >&2
+  exit 1
+fi
+
+CONFIG_DIR="${TMS_CONFIG_DIR:-$HOME/.config/tmux-start}"
+
+usage() {
+  cat <<'EOF'
+Usage: hms [--no-project] [<directory>]
+       hms --wt <name> [--branch <branch>] [--base <ref>] [--no-project] [<repo>]
+
+  <directory>       Folder for the space (default: current directory).
+  --wt <name>       Create the worktree <repo>-wt/<name> first, then open it.
+                    <repo> is any checkout of the repo (default: current directory).
+  --branch <branch> Branch for the worktree (default: <name>). An existing
+                    local branch is checked out; otherwise it is created.
+  --base <ref>      Start point for a new branch (default: origin/trunk).
+  --no-project      Do not run the project command in the shell pane.
+EOF
+}
+
+run_project=1
+target_dir="."
+wt_name=""
+wt_branch=""
+wt_base="origin/trunk"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --no-project) run_project=0; shift ;;
+    --wt)         wt_name="${2:?--wt needs a name}"; shift 2 ;;
+    --branch)     wt_branch="${2:?--branch needs a branch}"; shift 2 ;;
+    --base)       wt_base="${2:?--base needs a ref}"; shift 2 ;;
+    -h|--help)    usage; exit 0 ;;
+    -*)           echo "Error: unknown flag '$1'" >&2; exit 1 ;;
+    *)            target_dir="$1"; shift ;;
+  esac
+done
+
+if [[ -n "$wt_branch" && -z "$wt_name" ]]; then
+  echo "Error: --branch needs --wt" >&2
+  exit 1
+fi
+
+target_dir="$(cd "$target_dir" && pwd)"
+
+# --- Worktree -----------------------------------------------------------------
+
+if [[ -n "$wt_name" ]]; then
+  # The common git dir is the main checkout's .git, even when target_dir is
+  # itself a worktree, so <repo>-wt is always a sibling of the main checkout.
+  common_dir="$(git -C "$target_dir" rev-parse --path-format=absolute --git-common-dir)"
+  main_checkout="$(dirname "$common_dir")"
+  wt_path="$(dirname "$main_checkout")/$(basename "$main_checkout")-wt/$wt_name"
+  wt_branch="${wt_branch:-$wt_name}"
+
+  if [[ -e "$wt_path" ]]; then
+    echo "Error: $wt_path already exists. Open it with: hms $wt_path" >&2
+    exit 1
+  fi
+
+  echo "Fetching origin..."
+  git -C "$main_checkout" fetch origin --prune
+
+  if git -C "$main_checkout" show-ref --verify --quiet "refs/heads/$wt_branch"; then
+    git -C "$main_checkout" worktree add "$wt_path" "$wt_branch"
+  else
+    git -C "$main_checkout" rev-parse --verify --quiet "$wt_base^{commit}" >/dev/null || {
+      echo "Error: base '$wt_base' not found" >&2
+      exit 1
+    }
+    # --no-track: a branch made from origin/trunk must not push to trunk.
+    git -C "$main_checkout" worktree add --no-track -b "$wt_branch" "$wt_path" "$wt_base"
+  fi
+
+  target_dir="$wt_path"
+fi
+
+# --- Reuse an open space --------------------------------------------------------
+
+existing_space="$(herdr-app ls | python3 -c '
+import json, sys
+folder = sys.argv[1]
+for space in json.load(sys.stdin)["spaces"]:
+    if space["folder"] == folder and space["machine"] is None:
+        print(space["id"])
+        break
+' "$target_dir")"
+
+if [[ -n "$existing_space" ]]; then
+  herdr-app do space.select --id "$existing_space" >/dev/null
+  echo "Reusing existing space for $target_dir"
+  exit 0
+fi
+
+# --- Profile and project ---------------------------------------------------------
+
+source "$CONFIG_DIR/config.sh"
+
+profile=""
+project=""
+for pattern in "${!DIR_MAPPINGS[@]}"; do
+  if [[ "$target_dir" == $pattern* ]]; then
+    mapping="${DIR_MAPPINGS[$pattern]}"
+    profile="${mapping%%:*}"
+    [[ "$mapping" == *:* ]] && project="${mapping#*:}"
+    break
+  fi
+done
+profile="${profile:-$DEFAULT_PROFILE}"
+
+json_field() {
+  python3 -c 'import json, sys; print(json.load(sys.stdin)[sys.argv[1]])' "$1"
+}
+
+created="$(herdr-app do space.new --folder "$target_dir" --argv '["claude"]')"
+claude_terminal="$(json_field terminal <<<"$created")"
+shell_terminal="$claude_terminal"
+
+case "$profile" in
+  dev)
+    split="$(herdr-app do terminal.open --place right --folder "$target_dir")"
+    shell_terminal="$(json_field terminal <<<"$split")"
+    herdr-app do pane.focus --terminal "$claude_terminal" >/dev/null
+    ;;
+  simple) ;;
+  *)
+    echo "Warning: profile '$profile' has no Herdr layout; using one pane." >&2
+    ;;
+esac
+
+# The project scripts are written for tms and call `tmux send-keys`. This
+# shim turns those calls into `hc send`, so both tools share one set of
+# project scripts. hc send always presses Enter, so a trailing C-m is dropped.
+tmux() {
+  if [[ "$1" != "send-keys" ]]; then
+    echo "Error: hms only supports 'tmux send-keys' in project scripts" >&2
+    return 1
+  fi
+  shift
+  local text=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -t) shift 2 ;;
+      C-m|Enter) shift ;;
+      *) text+="$1"; shift ;;
+    esac
+  done
+  hc send "$shell_terminal" "$text" >/dev/null
+}
+
+if [[ -n "$project" && "$run_project" -eq 1 && "$shell_terminal" != "$claude_terminal" ]]; then
+  project_script="$CONFIG_DIR/projects/$project.sh"
+  if [[ -f "$project_script" ]]; then
+    # The scripts name their tmux target with these; the shim ignores the target.
+    CLAUDE_PANE=0
+    SHELL_PANE=1
+    source "$project_script"
+    run_project_commands "unused"
+  fi
+fi
+
+echo "Created space: $target_dir (profile: $profile${project:+, project: $project})"

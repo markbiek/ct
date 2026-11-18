@@ -22,7 +22,7 @@ fi
 
 mkdir -p "$bin_dir" "$tmux_start/projects"
 
-for name in ct ct-alfred ct-lib.sh ct-linear tms; do
+for name in ct ct-alfred ct-lib.sh ct-linear tms hms; do
   if [[ -e "$repo_dir/bin/$name" ]]; then
     ln -sfn "$repo_dir/bin/$name" "$bin_dir/$name"
   fi

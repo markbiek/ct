@@ -20,7 +20,7 @@ Clone it anywhere — substitute this repository's own clone URL for `REPO_URL`:
     git clone REPO_URL ~/dev/ct
     ~/dev/ct/install.sh
 
-Symlinks `ct`, `ct-linear`, and `tms` into `~/.local/bin`, symlinks the shipped
+Symlinks `ct`, `ct-linear`, `tms`, and `hms` into `~/.local/bin`, symlinks the shipped
 tmux profiles into `~/.config/tmux-start/profiles`, and seeds
 `~/.config/tmux-start/config.sh` from the example if you do not already have
 one. Your config is never overwritten.
